@@ -5,6 +5,7 @@ import { Camera as CameraIcon, RefreshCcw, Settings, Download, Wand2 } from 'luc
 
 type Step = 'loading' | 'aiming1' | 'aiming2' | 'result';
 type FrameMode = 'locked' | 'realtime';
+type PortalEffectId = 'xray' | 'scanlines' | 'glitch' | 'chromatic' | 'neon' | 'thermal' | 'noir';
 
 interface Rect {
   x: number;
@@ -26,9 +27,30 @@ interface FrameData {
   cy: number;
 }
 
+interface EffectPreset {
+  id: PortalEffectId;
+  label: string;
+  accentRgb: string;
+  borderDash?: number[];
+  lineWidthBoost?: number;
+}
+
 const XRAY_FILTER = 'invert(100%) sepia(100%) saturate(300%) hue-rotate(130deg) contrast(150%) brightness(120%)';
 const FRAME_SMOOTHING_ALPHA = 0.35;
 const STABILITY_SPEED_THRESHOLD = 80;
+const EFFECT_PRESETS: EffectPreset[] = [
+  { id: 'xray', label: 'Xray', accentRgb: '34, 211, 238' },
+  { id: 'scanlines', label: 'Scanline', accentRgb: '251, 191, 36', borderDash: [12, 8] },
+  { id: 'glitch', label: 'Glitch', accentRgb: '248, 113, 113', borderDash: [5, 4] },
+  { id: 'chromatic', label: 'Chromatic', accentRgb: '129, 140, 248' },
+  { id: 'neon', label: 'Neon', accentRgb: '74, 222, 128', lineWidthBoost: 1.2 },
+  { id: 'thermal', label: 'Thermal', accentRgb: '249, 115, 22', lineWidthBoost: 1.15 },
+  { id: 'noir', label: 'Noir', accentRgb: '226, 232, 240', borderDash: [14, 6] },
+];
+
+const getEffectPreset = (effect: PortalEffectId): EffectPreset => {
+  return EFFECT_PRESETS.find((preset) => preset.id === effect) ?? EFFECT_PRESETS[0];
+};
 
 export default function App() {
   const [step, setStep] = useState<Step>('loading');
@@ -43,7 +65,7 @@ export default function App() {
   const [trackingConfidence, setTrackingConfidence] = useState(0.7);
   const [distortionIntensity, setDistortionIntensity] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
-  const [portalEffect, setPortalEffect] = useState('xray');
+  const [portalEffect, setPortalEffect] = useState<PortalEffectId>('xray');
   const [frameMode, setFrameMode] = useState<FrameMode>('locked');
 
   const stepRef = useRef<Step>('loading');
@@ -58,7 +80,7 @@ export default function App() {
   const bgPortalCenterRef = useRef<{x: number, y: number} | null>(null);
   const capture1TimeRef = useRef<number | null>(null);
   const distortionIntensityRef = useRef(0.5);
-  const portalEffectRef = useRef('xray');
+  const portalEffectRef = useRef<PortalEffectId>('xray');
   const countdownRef = useRef<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -159,12 +181,15 @@ export default function App() {
     distortionIntensityRef.current = val;
   };
 
+  const setPortalEffectPreset = (effect: PortalEffectId) => {
+    setPortalEffect(effect);
+    portalEffectRef.current = effect;
+  };
+
   const cycleEffect = () => {
-    const effects = ['xray', 'scanlines', 'glitch', 'chromatic'];
-    const currentIndex = effects.indexOf(portalEffect);
-    const nextIndex = (currentIndex + 1) % effects.length;
-    setPortalEffect(effects[nextIndex]);
-    portalEffectRef.current = effects[nextIndex];
+    const currentIndex = EFFECT_PRESETS.findIndex((preset) => preset.id === portalEffect);
+    const nextIndex = (currentIndex + 1) % EFFECT_PRESETS.length;
+    setPortalEffectPreset(EFFECT_PRESETS[nextIndex].id);
   };
 
   useEffect(() => {
@@ -322,8 +347,9 @@ export default function App() {
     currentRect: Rect,
     progress: number,
     elapsed: number,
+    accentRgb: string,
   ) => {
-    canvasCtx.strokeStyle = '#00ffff';
+    canvasCtx.strokeStyle = `rgba(${accentRgb}, 1)`;
     canvasCtx.lineWidth = 4;
     canvasCtx.beginPath();
     const perimeter = 2 * currentRect.w + 2 * currentRect.h;
@@ -355,13 +381,13 @@ export default function App() {
 
     canvasCtx.stroke();
 
-    canvasCtx.fillStyle = '#00ffff';
+    canvasCtx.fillStyle = `rgba(${accentRgb}, 1)`;
     canvasCtx.font = 'bold 24px sans-serif';
     canvasCtx.textAlign = 'center';
     canvasCtx.fillText(`Tự động chụp: ${Math.ceil(3 - elapsed / 1000)}s`, currentRect.x + currentRect.w / 2, currentRect.y - 15);
   };
 
-  const drawPortalEffect = (ctx: CanvasRenderingContext2D, image: CanvasImageSource, effect: string, width: number, height: number) => {
+  const drawPortalEffect = (ctx: CanvasRenderingContext2D, image: CanvasImageSource, effect: PortalEffectId, width: number, height: number) => {
     if (effect === 'xray') {
       ctx.filter = XRAY_FILTER;
       ctx.drawImage(image, 0, 0, width, height);
@@ -402,7 +428,54 @@ export default function App() {
       ctx.globalAlpha = 1.0;
       ctx.globalCompositeOperation = 'source-over';
       ctx.filter = 'none';
+    } else if (effect === 'neon') {
+      ctx.filter = 'contrast(130%) saturate(180%) brightness(95%) hue-rotate(15deg)';
+      ctx.drawImage(image, 0, 0, width, height);
+      ctx.filter = 'none';
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(0, 0, width, height);
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (effect === 'thermal') {
+      ctx.filter = 'contrast(160%) saturate(40%) brightness(115%)';
+      ctx.drawImage(image, 0, 0, width, height);
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+      gradient.addColorStop(0.5, 'rgba(251, 191, 36, 0.3)');
+      gradient.addColorStop(1, 'rgba(239, 68, 68, 0.35)');
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.filter = 'none';
+    } else if (effect === 'noir') {
+      ctx.filter = 'grayscale(100%) contrast(130%) brightness(88%)';
+      ctx.drawImage(image, 0, 0, width, height);
+      const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, width * 0.2, width * 0.5, height * 0.5, width * 0.75);
+      vignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      vignette.addColorStop(1, 'rgba(0, 0, 0, 0.45)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, width, height);
+      ctx.filter = 'none';
     }
+  };
+
+  const drawFrameBorder = (
+    ctx: CanvasRenderingContext2D,
+    polygon: Point[],
+    angle: number,
+    alpha: number,
+    baseLineWidth: number,
+    preset: EffectPreset,
+  ) => {
+    ctx.strokeStyle = `rgba(${preset.accentRgb}, ${alpha})`;
+    ctx.lineWidth = baseLineWidth * (preset.lineWidthBoost ?? 1);
+    ctx.setLineDash(preset.borderDash ?? []);
+    drawWarpedPolygon(ctx, polygon, angle, distortionIntensityRef.current);
+    ctx.stroke();
+    ctx.setLineDash([]);
   };
 
   const drawWarpedPolygon = (ctx: CanvasRenderingContext2D, polygon: Point[], angle: number, intensity: number) => {
@@ -479,6 +552,7 @@ export default function App() {
       syncHasFrame(currentFrameData !== null);
 
       if (currentFrameData) {
+        const activePreset = getEffectPreset(portalEffectRef.current);
         const now = Date.now();
         const stable = isFrameStable(currentFrameData, now);
 
@@ -522,16 +596,13 @@ export default function App() {
         const lineWidth = 3 + 2 * pulse; // 3 to 5
 
         // Draw polygon border
-        canvasCtx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
-        canvasCtx.lineWidth = lineWidth;
-        drawWarpedPolygon(canvasCtx, polygon, angle, distortionIntensityRef.current);
-        canvasCtx.stroke();
+        drawFrameBorder(canvasCtx, polygon, angle, alpha, lineWidth, activePreset);
 
         // Draw progress border
         if (progress > 0) {
-          drawCaptureProgress(canvasCtx, currentRect, progress, elapsed);
+          drawCaptureProgress(canvasCtx, currentRect, progress, elapsed, activePreset.accentRgb);
         } else {
-          canvasCtx.fillStyle = '#00ffff';
+          canvasCtx.fillStyle = `rgba(${activePreset.accentRgb}, 1)`;
           canvasCtx.font = 'bold 20px sans-serif';
           canvasCtx.textAlign = 'center';
           canvasCtx.fillText('Giữ khung ổn định để bắt đầu đếm', currentRect.x + currentRect.w / 2, currentRect.y - 15);
@@ -566,6 +637,7 @@ export default function App() {
       syncHasFrame(frameData !== null);
 
       if (frameData) {
+        const activePreset = getEffectPreset(portalEffectRef.current);
         const now = Date.now();
         const stable = frameModeRef.current === 'locked' ? true : isFrameStable(frameData, now);
         let elapsed = 0;
@@ -607,16 +679,13 @@ export default function App() {
         const alpha = 0.4 + 0.6 * pulse; // 0.4 to 1.0
         const lineWidth = 3 + 2 * pulse; // 3 to 5
 
-        canvasCtx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
-        canvasCtx.lineWidth = lineWidth;
-        drawWarpedPolygon(canvasCtx, polygon, angle, distortionIntensityRef.current);
-        canvasCtx.stroke();
+        drawFrameBorder(canvasCtx, polygon, angle, alpha, lineWidth, activePreset);
 
         // Draw progress border
         if (progress > 0) {
-          drawCaptureProgress(canvasCtx, currentRect, progress, elapsed);
+          drawCaptureProgress(canvasCtx, currentRect, progress, elapsed, activePreset.accentRgb);
         } else if (frameModeRef.current === 'realtime') {
-          canvasCtx.fillStyle = '#00ffff';
+          canvasCtx.fillStyle = `rgba(${activePreset.accentRgb}, 1)`;
           canvasCtx.font = 'bold 20px sans-serif';
           canvasCtx.textAlign = 'center';
           canvasCtx.fillText('Giữ khung ổn định để bắt đầu đếm', currentRect.x + currentRect.w / 2, currentRect.y - 15);
@@ -670,6 +739,7 @@ export default function App() {
     const finalCtx = canvasRef.current.getContext('2d');
     if (finalCtx) {
       const { polygon, angle } = frameDataRef.current;
+      const activePreset = getEffectPreset(portalEffectRef.current);
       
       finalCtx.save();
       if (bgPortalCenterRef.current) {
@@ -692,10 +762,7 @@ export default function App() {
       finalCtx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
       finalCtx.restore();
 
-      finalCtx.strokeStyle = '#00ffff';
-      finalCtx.lineWidth = 4;
-      drawWarpedPolygon(finalCtx, polygon, angle, distortionIntensityRef.current);
-      finalCtx.stroke();
+      drawFrameBorder(finalCtx, polygon, angle, 1, 4, activePreset);
     }
 
     const dataUrl = canvasRef.current.toDataURL('image/png');
@@ -753,6 +820,8 @@ export default function App() {
             : (hasFrame ? (countdown !== null ? 'Khung realtime - đang đếm' : 'Đã nhận khung realtime') : 'Đang tìm khung realtime'))
           : 'Hoàn tất';
 
+          const activeEffectPreset = getEffectPreset(portalEffect);
+
   return (
     <main className="app-shell relative flex h-screen w-full flex-col items-center justify-center overflow-hidden text-[var(--text-primary)]">
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -783,10 +852,10 @@ export default function App() {
           onClick={cycleEffect}
           className="icon-chip flex items-center gap-2 rounded-full px-4 py-3 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
           title="Đổi hiệu ứng cổng"
-          aria-label={`Đổi hiệu ứng cổng, hiệu ứng hiện tại là ${portalEffect}`}
+          aria-label={`Đổi hiệu ứng cổng, hiệu ứng hiện tại là ${activeEffectPreset.label}`}
         >
           <Wand2 size={24} aria-hidden="true" />
-          <span className="font-display text-sm font-bold uppercase tracking-wider text-amber-300">{portalEffect}</span>
+          <span className="font-display text-sm font-bold uppercase tracking-wider text-amber-300">{activeEffectPreset.label}</span>
         </button>
 
         <button
@@ -810,6 +879,32 @@ export default function App() {
         >
           <h3 className="font-display mb-4 text-sm font-bold uppercase tracking-wider text-slate-200">Cấu hình AI</h3>
           <div className="space-y-5">
+            <div>
+              <p className="mb-2 text-sm text-slate-200">Hiệu ứng Portal &amp; Khung</p>
+              <div className="grid grid-cols-2 gap-2">
+                {EFFECT_PRESETS.map((preset) => {
+                  const isActive = preset.id === portalEffect;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setPortalEffectPreset(preset.id)}
+                      aria-pressed={isActive}
+                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                        isActive ? 'bg-cyan-600 text-white' : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      <span>{preset.label}</span>
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: `rgb(${preset.accentRgb})` }}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div>
               <p className="mb-2 text-sm text-slate-200">Chế độ khung bước 2</p>
               <div className="grid grid-cols-2 gap-2">
