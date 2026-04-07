@@ -1,16 +1,17 @@
 import { v2 as cloudinary } from 'cloudinary';
 
-const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-const apiKey = process.env.CLOUDINARY_API_KEY;
-const apiSecret = process.env.CLOUDINARY_API_SECRET;
+const configureCloudinary = () => {
+  if (process.env.CLOUDINARY_URL) {
+    cloudinary.config(process.env.CLOUDINARY_URL);
+    return;
+  }
 
-if (cloudName && apiKey && apiSecret) {
   cloudinary.config({
-    cloud_name: cloudName,
-    api_key: apiKey,
-    api_secret: apiSecret,
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
   });
-}
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -20,8 +21,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!cloudName || !apiKey || !apiSecret) {
-      res.status(500).json({ error: 'Cloudinary credentials are missing.' });
+    configureCloudinary();
+    const cfg = cloudinary.config();
+    const missingKeys = [];
+    if (!cfg.cloud_name) missingKeys.push('CLOUDINARY_CLOUD_NAME');
+    if (!cfg.api_key) missingKeys.push('CLOUDINARY_API_KEY');
+    if (!cfg.api_secret) missingKeys.push('CLOUDINARY_API_SECRET');
+
+    if (missingKeys.length > 0) {
+      res.status(500).json({ error: `Cloudinary credentials are missing: ${missingKeys.join(', ')}` });
       return;
     }
 
@@ -34,6 +42,11 @@ export default async function handler(req, res) {
     const match = imageDataUrl.match(/^data:image\/(png|jpe?g|webp);base64,(.+)$/i);
     if (!match) {
       res.status(400).json({ error: 'Unsupported image format.' });
+      return;
+    }
+
+    if (imageDataUrl.length > 18_000_000) {
+      res.status(413).json({ error: 'Image payload too large. Please retry.' });
       return;
     }
 
@@ -51,6 +64,11 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to upload image.' });
+    const statusCode =
+      typeof error === 'object' && error !== null && 'http_code' in error && Number.isInteger(error.http_code)
+        ? Number(error.http_code)
+        : 500;
+    const message = error instanceof Error ? error.message : 'Failed to upload image.';
+    res.status(statusCode >= 400 ? statusCode : 500).json({ error: message });
   }
 }

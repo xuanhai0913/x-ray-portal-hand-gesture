@@ -69,6 +69,7 @@ export default function App() {
   const [frameMode, setFrameMode] = useState<FrameMode>('locked');
   const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
 
   const stepRef = useRef<Step>('loading');
@@ -491,6 +492,7 @@ export default function App() {
   const persistCapturedImage = async (imageDataUrl: string) => {
     setSaveState('saving');
     setCopyState('idle');
+    setSaveErrorMessage(null);
     setSavedImageUrl(null);
 
     try {
@@ -502,11 +504,16 @@ export default function App() {
         body: JSON.stringify({ imageDataUrl }),
       });
 
+      const payload = (await response.json().catch(() => null)) as {
+        imageUrl?: string;
+        shareUrl?: string;
+        error?: string;
+      } | null;
+
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
+        throw new Error(payload?.error || `Upload failed: ${response.status}`);
       }
 
-      const payload = (await response.json()) as { imageUrl?: string; shareUrl?: string };
       const sharedUrl = payload.shareUrl ?? payload.imageUrl;
       if (!sharedUrl) {
         throw new Error('Missing image URL from server response');
@@ -515,8 +522,10 @@ export default function App() {
       setSavedImageUrl(normalizeImageUrl(sharedUrl));
       setSaveState('saved');
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Upload failed.';
       console.error(error);
       setSaveState('error');
+      setSaveErrorMessage(message);
       setSavedImageUrl(null);
     }
   };
@@ -821,8 +830,9 @@ export default function App() {
     }
 
     const dataUrl = canvasRef.current.toDataURL('image/png');
+    const uploadDataUrl = canvasRef.current.toDataURL('image/jpeg', 0.86);
     setFinalImage(dataUrl);
-    void persistCapturedImage(dataUrl);
+    void persistCapturedImage(uploadDataUrl);
     updateCountdown(null);
     syncHasFrame(false);
     setStep('result');
@@ -834,6 +844,7 @@ export default function App() {
     setFinalImage(null);
     setSavedImageUrl(null);
     setSaveState('idle');
+    setSaveErrorMessage(null);
     setCopyState('idle');
     lockedFrameDataRef.current = null;
     smoothedFrameDataRef.current = null;
@@ -855,6 +866,7 @@ export default function App() {
     setFinalImage(null);
     setSavedImageUrl(null);
     setSaveState('idle');
+    setSaveErrorMessage(null);
     setCopyState('idle');
     syncHasFrame(false);
     lockedFrameDataRef.current = null;
@@ -1183,7 +1195,11 @@ export default function App() {
               <p className="text-xs text-emerald-200">Đã lưu ảnh. Link chia sẻ sẵn sàng.</p>
             )}
             {saveState === 'error' && (
-              <p className="text-xs text-rose-200">Không thể lưu ảnh lên server. Bạn vẫn có thể tải ảnh xuống máy.</p>
+              <p className="text-xs text-rose-200">
+                {saveErrorMessage
+                  ? `Lưu server thất bại: ${saveErrorMessage}`
+                  : 'Không thể lưu ảnh lên server. Bạn vẫn có thể tải ảnh xuống máy.'}
+              </p>
             )}
           </div>
         )}
