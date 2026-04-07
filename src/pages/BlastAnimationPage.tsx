@@ -62,6 +62,20 @@ const drawMirrored = (
   ctx.restore();
 };
 
+const clipAnnulus = (
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  innerRadius: number,
+  outerRadius: number,
+) => {
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2, true);
+  ctx.closePath();
+  ctx.clip('evenodd');
+};
+
 const drawBlastEffect = (
   ctx: CanvasRenderingContext2D,
   image: CanvasImageSource,
@@ -71,43 +85,54 @@ const drawBlastEffect = (
   centerX: number,
   centerY: number,
 ) => {
-  const suctionScale = Math.max(0.38, 1 - progress * 0.62);
-  const spin = progress * Math.PI * 5;
-  const ringRadius = 60 + progress * 180;
+  const influenceRadius = 95 + progress * 210;
+  const ringCount = 18;
+
+  // Localized vortex: only annulus zones near hand center are transformed.
+  for (let layer = ringCount - 1; layer >= 0; layer -= 1) {
+    const outer = influenceRadius * ((layer + 1) / ringCount);
+    const inner = influenceRadius * (layer / ringCount);
+    const radialFactor = 1 - (inner + outer) / 2 / influenceRadius;
+    const ringSpin = progress * radialFactor * Math.PI * 2.7;
+    const ringScale = 1 - progress * radialFactor * 0.45;
+
+    ctx.save();
+    clipAnnulus(ctx, centerX, centerY, inner, outer);
+    ctx.globalAlpha = 0.08 + radialFactor * 0.22;
+    ctx.globalCompositeOperation = 'lighter';
+
+    ctx.translate(centerX, centerY);
+    ctx.rotate(ringSpin);
+    ctx.scale(ringScale, ringScale);
+    ctx.translate(-centerX, -centerY);
+
+    ctx.filter = `contrast(${110 + radialFactor * 60}%) saturate(${120 + radialFactor * 80}%)`;
+    drawMirrored(ctx, image, width, height);
+    ctx.filter = 'none';
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = 0.82;
-  ctx.translate(centerX, centerY);
-  ctx.rotate(spin);
-  ctx.scale(suctionScale, suctionScale);
-  ctx.translate(-centerX, -centerY);
-  ctx.filter = 'contrast(150%) saturate(180%) hue-rotate(30deg) brightness(110%)';
-  drawMirrored(ctx, image, width, height);
-  ctx.filter = 'none';
-  ctx.restore();
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-
-  const radial = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, ringRadius * 1.5);
+  const radial = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, influenceRadius * 1.5);
   radial.addColorStop(0, `rgba(251, 191, 36, ${0.45 - progress * 0.2})`);
   radial.addColorStop(0.4, `rgba(56, 189, 248, ${0.35 - progress * 0.18})`);
   radial.addColorStop(1, 'rgba(15, 23, 42, 0)');
   ctx.fillStyle = radial;
   ctx.beginPath();
-  ctx.arc(centerX, centerY, ringRadius * 1.5, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, influenceRadius * 1.5, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = `rgba(251, 191, 36, ${0.88 - progress * 0.55})`;
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, influenceRadius, 0, Math.PI * 2);
   ctx.stroke();
 
   for (let i = 0; i < 22; i += 1) {
     const theta = progress * 13 + i * (Math.PI / 11);
-    const orbit = ringRadius * (0.62 + (i % 3) * 0.21);
+    const orbit = influenceRadius * (0.62 + (i % 3) * 0.21);
     const px = centerX + Math.cos(theta) * orbit;
     const py = centerY + Math.sin(theta) * orbit;
     ctx.fillStyle = `rgba(34, 211, 238, ${0.7 - progress * 0.35})`;
@@ -201,6 +226,11 @@ export default function BlastAnimationPage() {
             const centerX = (1 - blastCenter.x) * canvas.width;
             const centerY = blastCenter.y * canvas.height;
             triggerBlast(centerX, centerY);
+          } else if (blastCenter && blastStartRef.current) {
+            blastCenterRef.current = {
+              x: (1 - blastCenter.x) * canvas.width,
+              y: blastCenter.y * canvas.height,
+            };
           }
 
           if (blastStartRef.current && blastCenterRef.current) {
