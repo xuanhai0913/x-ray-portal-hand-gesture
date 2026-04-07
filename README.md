@@ -32,15 +32,26 @@ The core experience is a realtime hand-gesture pipeline powered by MediaPipe + C
 
 ---
 
+## Route Layout
+
+The app is now split into independent capture experiences:
+
+- `/` - Xray Portal (original 2-step Xray workflow)
+- `/photoboth` - PhotoBooth mode (3 continuous shots)
+- `/blast-animation` - Blast Animation mode (gesture-triggered center vortex)
+
+---
+
 ## Highlights
 
-- Realtime hand tracking via webcam
-- Dynamic portal rendering with warped polygon clipping
-- Two-stage capture workflow for frozen background + live foreground
-- Download-ready PNG result
-- Adjustable AI controls: detection confidence, tracking confidence, distortion
+- Independent route-per-mode architecture (Xray / PhotoBooth / Blast Animation)
+- Realtime hand tracking via webcam (Xray + Blast routes)
+- Dynamic portal rendering with warped polygon clipping in Xray mode
+- PhotoBooth sequence capture with 3 continuous frames
+- Gesture-triggered vortex blast animation on dedicated route
+- Download-ready PNG outputs and snapshots
 - Accessibility upgrades: live status announcements, keyboard-focus states, reduced-motion support
-- Camera error handling with retry flow
+- Camera error handling with retry flows
 
 ---
 
@@ -87,6 +98,9 @@ npm run preview
 ├── src/
 │   ├── App.tsx         # Realtime hand tracking + portal pipeline
 │   ├── main.tsx        # React bootstrap
+│   ├── pages/
+│   │   ├── PhotoBoothPage.tsx
+│   │   └── BlastAnimationPage.tsx
 │   └── index.css       # Tailwind + global motion accessibility rules
 └── README.md
 ```
