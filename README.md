@@ -38,17 +38,15 @@ The app is now split into independent capture experiences:
 
 - `/` - Xray Portal (original 2-step Xray workflow)
 - `/photoboth` - PhotoBooth mode (3 continuous shots)
-- `/blast-animation` - Blast Animation mode (gesture-triggered center vortex)
 
 ---
 
 ## Highlights
 
-- Independent route-per-mode architecture (Xray / PhotoBooth / Blast Animation)
-- Realtime hand tracking via webcam (Xray + Blast routes)
+- Independent route-per-mode architecture (Xray / PhotoBooth)
+- Realtime hand tracking via webcam
 - Dynamic portal rendering with warped polygon clipping in Xray mode
 - PhotoBooth sequence capture with 3 continuous frames
-- Gesture-triggered vortex blast animation on dedicated route
 - Download-ready PNG outputs and snapshots
 - Accessibility upgrades: live status announcements, keyboard-focus states, reduced-motion support
 - Camera error handling with retry flows
@@ -99,8 +97,7 @@ npm run preview
 │   ├── App.tsx         # Realtime hand tracking + portal pipeline
 │   ├── main.tsx        # React bootstrap
 │   ├── pages/
-│   │   ├── PhotoBoothPage.tsx
-│   │   └── BlastAnimationPage.tsx
+│   │   └── PhotoBoothPage.tsx
 │   └── index.css       # Tailwind + global motion accessibility rules
 └── README.md
 ```

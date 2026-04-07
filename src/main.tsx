@@ -3,7 +3,6 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import PhotoBoothPage from './pages/PhotoBoothPage.tsx';
-import BlastAnimationPage from './pages/BlastAnimationPage.tsx';
 import './index.css';
 
 const APP_AUTHOR = 'Nguyen Xuan Hai';
@@ -13,7 +12,6 @@ const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/';
 
 const getPageByPath = () => {
   if (normalizedPath === '/photoboth') return PhotoBoothPage;
-  if (normalizedPath === '/blast-animation') return BlastAnimationPage;
   return App;
 };
 

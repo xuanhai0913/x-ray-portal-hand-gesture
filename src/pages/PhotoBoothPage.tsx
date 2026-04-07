@@ -457,7 +457,6 @@ export default function PhotoBoothPage() {
         <nav className="flex items-center gap-2">
           <a href="/" className="workflow-chip rounded-full px-4 py-2 text-xs text-slate-100">/</a>
           <a href="/photoboth" className="workflow-chip rounded-full border-cyan-300 px-4 py-2 text-xs text-cyan-100">/photoboth</a>
-          <a href="/blast-animation" className="workflow-chip rounded-full px-4 py-2 text-xs text-slate-100">/blast-animation</a>
         </nav>
       </header>
 
