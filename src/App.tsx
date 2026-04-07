@@ -6,7 +6,6 @@ import { Camera as CameraIcon, RefreshCcw, Settings, Download, Wand2 } from 'luc
 type Step = 'loading' | 'aiming1' | 'aiming2' | 'result';
 type FrameMode = 'locked' | 'realtime';
 type PortalEffectId = 'xray' | 'scanlines' | 'glitch' | 'chromatic' | 'neon' | 'thermal' | 'noir';
-type CaptureFilterId = 'none' | 'beauty';
 
 interface Rect {
   x: number;
@@ -36,26 +35,9 @@ interface EffectPreset {
   lineWidthBoost?: number;
 }
 
-interface CaptureFilterPreset {
-  id: CaptureFilterId;
-  label: string;
-}
-
-interface FaceBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-interface BrowserFaceDetector {
-  detect(input: CanvasImageSource): Promise<Array<{ boundingBox: { x: number; y: number; width: number; height: number } }>>;
-}
-
 const XRAY_FILTER = 'invert(100%) sepia(100%) saturate(300%) hue-rotate(130deg) contrast(150%) brightness(120%)';
 const FRAME_SMOOTHING_ALPHA = 0.35;
 const STABILITY_SPEED_THRESHOLD = 80;
-const FACE_DETECT_INTERVAL_MS = 140;
 const EFFECT_PRESETS: EffectPreset[] = [
   { id: 'xray', label: 'Xray', accentRgb: '34, 211, 238' },
   { id: 'scanlines', label: 'Scanline', accentRgb: '251, 191, 36', borderDash: [12, 8] },
@@ -64,10 +46,6 @@ const EFFECT_PRESETS: EffectPreset[] = [
   { id: 'neon', label: 'Neon', accentRgb: '74, 222, 128', lineWidthBoost: 1.2 },
   { id: 'thermal', label: 'Thermal', accentRgb: '249, 115, 22', lineWidthBoost: 1.15 },
   { id: 'noir', label: 'Noir', accentRgb: '226, 232, 240', borderDash: [14, 6] },
-];
-const CAPTURE_FILTER_PRESETS: CaptureFilterPreset[] = [
-  { id: 'none', label: 'Natural' },
-  { id: 'beauty', label: 'Beauty Skin' },
 ];
 
 const getEffectPreset = (effect: PortalEffectId): EffectPreset => {
@@ -88,8 +66,10 @@ export default function App() {
   const [distortionIntensity, setDistortionIntensity] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
   const [portalEffect, setPortalEffect] = useState<PortalEffectId>('xray');
-  const [captureFilter, setCaptureFilter] = useState<CaptureFilterId>('none');
   const [frameMode, setFrameMode] = useState<FrameMode>('locked');
+  const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
 
   const stepRef = useRef<Step>('loading');
   const frameModeRef = useRef<FrameMode>('locked');
@@ -104,11 +84,6 @@ export default function App() {
   const capture1TimeRef = useRef<number | null>(null);
   const distortionIntensityRef = useRef(0.5);
   const portalEffectRef = useRef<PortalEffectId>('xray');
-  const captureFilterRef = useRef<CaptureFilterId>('none');
-  const faceDetectorRef = useRef<BrowserFaceDetector | null>(null);
-  const faceBoxRef = useRef<FaceBox | null>(null);
-  const faceDetectInFlightRef = useRef(false);
-  const lastFaceDetectAtRef = useRef(0);
   const countdownRef = useRef<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -136,16 +111,6 @@ export default function App() {
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
-        const detectorFactory = (window as Window & {
-          FaceDetector?: new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => BrowserFaceDetector;
-        }).FaceDetector;
-        if (detectorFactory && !faceDetectorRef.current) {
-          faceDetectorRef.current = new detectorFactory({
-            fastMode: true,
-            maxDetectedFaces: 1,
-          });
-        }
-
         handsRef.current.setOptions({
           maxNumHands: 2,
           modelComplexity: 1,
@@ -158,39 +123,6 @@ export default function App() {
         cameraRef.current = new Camera(videoRef.current, {
           onFrame: async () => {
             if (videoRef.current && handsRef.current && stepRef.current !== 'result') {
-              const now = performance.now();
-              if (
-                faceDetectorRef.current &&
-                !faceDetectInFlightRef.current &&
-                now - lastFaceDetectAtRef.current >= FACE_DETECT_INTERVAL_MS
-              ) {
-                const detector = faceDetectorRef.current;
-                const sourceVideo = videoRef.current;
-                faceDetectInFlightRef.current = true;
-                lastFaceDetectAtRef.current = now;
-                detector
-                  .detect(sourceVideo)
-                  .then((detections) => {
-                    const box = detections[0]?.boundingBox;
-                    if (!box || sourceVideo.videoWidth === 0 || sourceVideo.videoHeight === 0) {
-                      faceBoxRef.current = null;
-                      return;
-                    }
-
-                    const x = Math.max(0, box.x);
-                    const y = Math.max(0, box.y);
-                    const w = Math.max(0, Math.min(box.width, sourceVideo.videoWidth - x));
-                    const h = Math.max(0, Math.min(box.height, sourceVideo.videoHeight - y));
-                    faceBoxRef.current = w > 1 && h > 1 ? { x, y, w, h } : null;
-                  })
-                  .catch(() => {
-                    faceBoxRef.current = null;
-                  })
-                  .finally(() => {
-                    faceDetectInFlightRef.current = false;
-                  });
-              }
-
               await handsRef.current.send({ image: videoRef.current });
             }
           },
@@ -229,10 +161,6 @@ export default function App() {
         handsRef.current = null;
       }
       canvasCtxRef.current = null;
-      faceDetectorRef.current = null;
-      faceBoxRef.current = null;
-      faceDetectInFlightRef.current = false;
-      lastFaceDetectAtRef.current = 0;
     };
   }, [initAttempt]);
 
@@ -251,10 +179,6 @@ export default function App() {
     frameModeRef.current = frameMode;
   }, [frameMode]);
 
-  useEffect(() => {
-    captureFilterRef.current = captureFilter;
-  }, [captureFilter]);
-
   const handleDistortionChange = (val: number) => {
     setDistortionIntensity(val);
     distortionIntensityRef.current = val;
@@ -263,11 +187,6 @@ export default function App() {
   const setPortalEffectPreset = (effect: PortalEffectId) => {
     setPortalEffect(effect);
     portalEffectRef.current = effect;
-  };
-
-  const setCaptureFilterPreset = (filter: CaptureFilterId) => {
-    setCaptureFilter(filter);
-    captureFilterRef.current = filter;
   };
 
   const cycleEffect = () => {
@@ -562,75 +481,60 @@ export default function App() {
     ctx.setLineDash([]);
   };
 
-  const applyCaptureFilterPass = (
-    ctx: CanvasRenderingContext2D,
-    filter: CaptureFilterId,
-    image: CanvasImageSource,
-    width: number,
-    height: number,
-    faceBox: FaceBox | null,
-    fallbackRect?: Rect,
-  ) => {
-    if (filter !== 'beauty') return;
+  const normalizeImageUrl = (rawUrl: string): string => {
+    if (/^https?:\/\//i.test(rawUrl)) {
+      return rawUrl;
+    }
+    return `${window.location.origin}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
+  };
 
-    const resolveBeautyTarget = (): FaceBox | null => {
-      if (faceBox) {
-        return faceBox;
+  const persistCapturedImage = async (imageDataUrl: string) => {
+    setSaveState('saving');
+    setCopyState('idle');
+    setSavedImageUrl(null);
+
+    try {
+      const response = await fetch('/api/images', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageDataUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status}`);
       }
 
-      if (fallbackRect) {
-        const x = Math.max(0, fallbackRect.x + fallbackRect.w * 0.14);
-        const y = Math.max(0, fallbackRect.y + fallbackRect.h * 0.04);
-        const w = Math.min(width - x, fallbackRect.w * 0.72);
-        const h = Math.min(height - y, fallbackRect.h * 0.9);
-        return w > 1 && h > 1 ? { x, y, w, h } : null;
+      const payload = (await response.json()) as { imageUrl?: string; shareUrl?: string };
+      const sharedUrl = payload.shareUrl ?? payload.imageUrl;
+      if (!sharedUrl) {
+        throw new Error('Missing image URL from server response');
       }
 
-      return {
-        x: width * 0.29,
-        y: height * 0.16,
-        w: width * 0.42,
-        h: height * 0.5,
-      };
-    };
+      setSavedImageUrl(normalizeImageUrl(sharedUrl));
+      setSaveState('saved');
+    } catch (error) {
+      console.error(error);
+      setSaveState('error');
+      setSavedImageUrl(null);
+    }
+  };
 
-    const targetFace = resolveBeautyTarget();
-    if (!targetFace) return;
+  const shareOnFacebook = () => {
+    if (!savedImageUrl) return;
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(savedImageUrl)}`;
+    window.open(fbUrl, '_blank', 'noopener,noreferrer');
+  };
 
-    const padX = targetFace.w * 0.25;
-    const padY = targetFace.h * 0.32;
-    const fx = Math.max(0, targetFace.x - padX);
-    const fy = Math.max(0, targetFace.y - padY);
-    const fw = Math.min(width - fx, targetFace.w + padX * 2);
-    const fh = Math.min(height - fy, targetFace.h + padY * 2);
-    const cx = fx + fw / 2;
-    const cy = fy + fh / 2;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, fw * 0.5, fh * 0.55, 0, 0, Math.PI * 2);
-    ctx.clip();
-
-    ctx.filter = 'blur(14px) saturate(116%) brightness(109%)';
-    ctx.globalAlpha = 0.72;
-    ctx.drawImage(image, 0, 0, width, height);
-
-    ctx.filter = 'contrast(106%) brightness(105%)';
-    ctx.globalAlpha = 0.2;
-    ctx.drawImage(image, 0, 0, width, height);
-
-    ctx.filter = 'none';
-    ctx.globalCompositeOperation = 'soft-light';
-    ctx.globalAlpha = 0.28;
-    const tone = ctx.createRadialGradient(cx, cy, fw * 0.1, cx, cy, fw * 0.62);
-    tone.addColorStop(0, 'rgba(255, 233, 214, 0.68)');
-    tone.addColorStop(1, 'rgba(255, 233, 214, 0)');
-    ctx.fillStyle = tone;
-    ctx.fillRect(fx, fy, fw, fh);
-
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
+  const copyShareLink = async () => {
+    if (!savedImageUrl) return;
+    try {
+      await navigator.clipboard.writeText(savedImageUrl);
+      setCopyState('copied');
+    } catch {
+      setCopyState('error');
+    }
   };
 
   const drawWarpedPolygon = (ctx: CanvasRenderingContext2D, polygon: Point[], angle: number, intensity: number) => {
@@ -741,15 +645,6 @@ export default function App() {
         canvasCtx.scale(-1, 1);
         
         drawPortalEffect(canvasCtx, results.image, portalEffectRef.current, canvas.width, canvas.height);
-        applyCaptureFilterPass(
-          canvasCtx,
-          captureFilterRef.current,
-          results.image,
-          canvas.width,
-          canvas.height,
-          faceBoxRef.current,
-          currentRect,
-        );
         
         canvasCtx.restore();
 
@@ -874,15 +769,6 @@ export default function App() {
       bgCtx.translate(bgCanvasRef.current.width, 0);
       bgCtx.scale(-1, 1);
       bgCtx.drawImage(videoRef.current, 0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
-      applyCaptureFilterPass(
-        bgCtx,
-        captureFilterRef.current,
-        videoRef.current,
-        bgCanvasRef.current.width,
-        bgCanvasRef.current.height,
-        faceBoxRef.current,
-        frameDataRef.current.rect,
-      );
       bgCtx.restore();
     }
 
@@ -936,6 +822,7 @@ export default function App() {
 
     const dataUrl = canvasRef.current.toDataURL('image/png');
     setFinalImage(dataUrl);
+    void persistCapturedImage(dataUrl);
     updateCountdown(null);
     syncHasFrame(false);
     setStep('result');
@@ -945,9 +832,11 @@ export default function App() {
   const retryCamera = () => {
     setCameraError(null);
     setFinalImage(null);
+    setSavedImageUrl(null);
+    setSaveState('idle');
+    setCopyState('idle');
     lockedFrameDataRef.current = null;
     smoothedFrameDataRef.current = null;
-    faceBoxRef.current = null;
     resetFrameStability();
     frameDataRef.current = null;
     holdStartTimeRef.current = null;
@@ -964,10 +853,12 @@ export default function App() {
   const reset = () => {
     setCameraError(null);
     setFinalImage(null);
+    setSavedImageUrl(null);
+    setSaveState('idle');
+    setCopyState('idle');
     syncHasFrame(false);
     lockedFrameDataRef.current = null;
     smoothedFrameDataRef.current = null;
-    faceBoxRef.current = null;
     resetFrameStability();
     frameDataRef.current = null;
     holdStartTimeRef.current = null;
@@ -1071,27 +962,6 @@ export default function App() {
                         style={{ backgroundColor: `rgb(${preset.accentRgb})` }}
                         aria-hidden="true"
                       />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-sm text-slate-200">Filter Chụp Lần 1 (Face Beauty)</p>
-              <div className="grid grid-cols-2 gap-2">
-                {CAPTURE_FILTER_PRESETS.map((preset) => {
-                  const isActive = preset.id === captureFilter;
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => setCaptureFilterPreset(preset.id)}
-                      aria-pressed={isActive}
-                      className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                        isActive ? 'bg-cyan-600 text-white' : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800'
-                      }`}
-                    >
-                      {preset.label}
                     </button>
                   );
                 })}
@@ -1265,23 +1135,56 @@ export default function App() {
         )}
 
         {step === 'result' && (
-          <div className="flex gap-4">
-            <a
-              href={finalImage || '#'}
-              download="xray-portal.png"
-              className="cta cta-success inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
-            >
-              <Download size={24} aria-hidden="true" />
-              Tải ảnh xuống
-            </a>
-            <button
-              type="button"
-              onClick={reset}
-              className="cta cta-download inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
-            >
-              <RefreshCcw size={24} aria-hidden="true" />
-              Chụp lại từ đầu
-            </button>
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex gap-4">
+              <a
+                href={finalImage || '#'}
+                download="xray-portal.png"
+                className="cta cta-success inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+              >
+                <Download size={24} aria-hidden="true" />
+                Tải ảnh xuống
+              </a>
+              <button
+                type="button"
+                onClick={reset}
+                className="cta cta-download inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+              >
+                <RefreshCcw size={24} aria-hidden="true" />
+                Chụp lại từ đầu
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={shareOnFacebook}
+                disabled={!savedImageUrl || saveState === 'saving'}
+                className={`cta inline-flex items-center gap-2 px-6 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
+                  savedImageUrl && saveState !== 'saving' ? 'cta-primary' : 'cta-disabled'
+                }`}
+              >
+                Chia sẻ Facebook
+              </button>
+              <button
+                type="button"
+                onClick={copyShareLink}
+                disabled={!savedImageUrl || saveState === 'saving'}
+                className={`cta inline-flex items-center gap-2 px-6 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
+                  savedImageUrl && saveState !== 'saving' ? 'cta-neutral' : 'cta-disabled'
+                }`}
+              >
+                {copyState === 'copied' ? 'Đã copy link' : 'Sao chép liên kết'}
+              </button>
+            </div>
+
+            {saveState === 'saving' && <p className="text-xs text-cyan-200">Đang tự động lưu ảnh lên server...</p>}
+            {saveState === 'saved' && savedImageUrl && (
+              <p className="text-xs text-emerald-200">Đã lưu ảnh. Link chia sẻ sẵn sàng.</p>
+            )}
+            {saveState === 'error' && (
+              <p className="text-xs text-rose-200">Không thể lưu ảnh lên server. Bạn vẫn có thể tải ảnh xuống máy.</p>
+            )}
           </div>
         )}
       </div>
