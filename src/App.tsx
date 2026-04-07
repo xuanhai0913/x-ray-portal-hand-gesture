@@ -4,6 +4,7 @@ import { Camera } from '@mediapipe/camera_utils';
 import { Camera as CameraIcon, RefreshCcw, Settings, Download, Wand2 } from 'lucide-react';
 
 type Step = 'loading' | 'aiming1' | 'aiming2' | 'result';
+type FrameMode = 'locked' | 'realtime';
 
 interface Rect {
   x: number;
@@ -26,6 +27,8 @@ interface FrameData {
 }
 
 const XRAY_FILTER = 'invert(100%) sepia(100%) saturate(300%) hue-rotate(130deg) contrast(150%) brightness(120%)';
+const FRAME_SMOOTHING_ALPHA = 0.35;
+const STABILITY_SPEED_THRESHOLD = 80;
 
 export default function App() {
   const [step, setStep] = useState<Step>('loading');
@@ -41,9 +44,14 @@ export default function App() {
   const [distortionIntensity, setDistortionIntensity] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
   const [portalEffect, setPortalEffect] = useState('xray');
+  const [frameMode, setFrameMode] = useState<FrameMode>('locked');
 
   const stepRef = useRef<Step>('loading');
+  const frameModeRef = useRef<FrameMode>('locked');
   const frameDataRef = useRef<FrameData | null>(null);
+  const lockedFrameDataRef = useRef<FrameData | null>(null);
+  const smoothedFrameDataRef = useRef<FrameData | null>(null);
+  const lastStabilitySampleRef = useRef<{ cx: number; cy: number; time: number } | null>(null);
   const hasFrameRef = useRef(false);
   const holdStartTimeRef = useRef<number | null>(null);
   const isCapturingRef = useRef(false);
@@ -142,6 +150,10 @@ export default function App() {
     }
   }, [detectionConfidence, trackingConfidence]);
 
+  useEffect(() => {
+    frameModeRef.current = frameMode;
+  }, [frameMode]);
+
   const handleDistortionChange = (val: number) => {
     setDistortionIntensity(val);
     distortionIntensityRef.current = val;
@@ -166,11 +178,15 @@ export default function App() {
     } else if (step === 'aiming1') {
       setA11yStatus('Bước 1. Tạo khung tay để chụp nền portal.');
     } else if (step === 'aiming2') {
-      setA11yStatus('Bước 2. Tạo khung tay lần nữa để chụp ảnh hoàn chỉnh.');
+      setA11yStatus(
+        frameMode === 'locked'
+          ? 'Bước 2. Khung đã được khóa từ lần chụp đầu. Giữ tư thế để chụp ảnh hoàn chỉnh.'
+          : 'Bước 2. Tạo lại khung tay ổn định để chụp ảnh hoàn chỉnh.',
+      );
     } else if (step === 'result') {
       setA11yStatus('Đã hoàn thành ảnh ghép. Bạn có thể tải ảnh xuống hoặc chụp lại.');
     }
-  }, [step, cameraError]);
+  }, [step, cameraError, frameMode]);
 
   useEffect(() => {
     if (countdown !== null && (step === 'aiming1' || step === 'aiming2')) {
@@ -191,6 +207,13 @@ export default function App() {
       setCountdown(nextCountdown);
     }
   };
+
+  useEffect(() => {
+    holdStartTimeRef.current = null;
+    lastStabilitySampleRef.current = null;
+    smoothedFrameDataRef.current = null;
+    updateCountdown(null);
+  }, [frameMode]);
 
   const getCurrentFrameData = (results: Results, canvas: HTMLCanvasElement): FrameData | null => {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length !== 2) {
@@ -238,6 +261,60 @@ export default function App() {
     }
 
     return { rect, polygon, angle, cx, cy };
+  };
+
+  const smoothFrameData = (next: FrameData | null): FrameData | null => {
+    if (!next) {
+      smoothedFrameDataRef.current = null;
+      return null;
+    }
+
+    const prev = smoothedFrameDataRef.current;
+    if (!prev) {
+      smoothedFrameDataRef.current = next;
+      return next;
+    }
+
+    const t = FRAME_SMOOTHING_ALPHA;
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+
+    const smoothed: FrameData = {
+      rect: {
+        x: lerp(prev.rect.x, next.rect.x),
+        y: lerp(prev.rect.y, next.rect.y),
+        w: lerp(prev.rect.w, next.rect.w),
+        h: lerp(prev.rect.h, next.rect.h),
+      },
+      polygon: next.polygon.map((p, index) => ({
+        x: lerp(prev.polygon[index]?.x ?? p.x, p.x),
+        y: lerp(prev.polygon[index]?.y ?? p.y, p.y),
+      })),
+      angle: lerp(prev.angle, next.angle),
+      cx: lerp(prev.cx, next.cx),
+      cy: lerp(prev.cy, next.cy),
+    };
+
+    smoothedFrameDataRef.current = smoothed;
+    return smoothed;
+  };
+
+  const resetFrameStability = () => {
+    lastStabilitySampleRef.current = null;
+  };
+
+  const isFrameStable = (frameData: FrameData, now: number): boolean => {
+    const lastSample = lastStabilitySampleRef.current;
+    if (!lastSample) {
+      lastStabilitySampleRef.current = { cx: frameData.cx, cy: frameData.cy, time: now };
+      return true;
+    }
+
+    const dt = Math.max(16, now - lastSample.time);
+    const distance = Math.hypot(frameData.cx - lastSample.cx, frameData.cy - lastSample.cy);
+    const speed = (distance / dt) * 1000;
+
+    lastStabilitySampleRef.current = { cx: frameData.cx, cy: frameData.cy, time: now };
+    return speed <= STABILITY_SPEED_THRESHOLD;
   };
 
   const drawCaptureProgress = (
@@ -396,19 +473,30 @@ export default function App() {
       canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
       canvasCtx.restore();
 
-      const currentFrameData = getCurrentFrameData(results, canvas);
+      const currentFrameData = smoothFrameData(getCurrentFrameData(results, canvas));
 
       frameDataRef.current = currentFrameData;
       syncHasFrame(currentFrameData !== null);
 
       if (currentFrameData) {
+        const now = Date.now();
+        const stable = isFrameStable(currentFrameData, now);
+
         const { rect: currentRect, polygon, angle } = currentFrameData;
-        if (!holdStartTimeRef.current) {
-          holdStartTimeRef.current = Date.now();
+        let elapsed = 0;
+        let progress = 0;
+
+        if (stable) {
+          if (!holdStartTimeRef.current) {
+            holdStartTimeRef.current = now;
+          }
+          elapsed = now - holdStartTimeRef.current;
+          progress = Math.min(1, elapsed / 3000);
+          updateCountdown(Math.max(0, Math.ceil(3 - elapsed / 1000)));
+        } else {
+          holdStartTimeRef.current = null;
+          updateCountdown(null);
         }
-        const elapsed = Date.now() - holdStartTimeRef.current;
-        const progress = Math.min(1, elapsed / 3000);
-        updateCountdown(Math.max(0, Math.ceil(3 - elapsed / 1000)));
 
         if (elapsed >= 3000 && !isCapturingRef.current) {
           isCapturingRef.current = true;
@@ -442,10 +530,16 @@ export default function App() {
         // Draw progress border
         if (progress > 0) {
           drawCaptureProgress(canvasCtx, currentRect, progress, elapsed);
+        } else {
+          canvasCtx.fillStyle = '#00ffff';
+          canvasCtx.font = 'bold 20px sans-serif';
+          canvasCtx.textAlign = 'center';
+          canvasCtx.fillText('Giữ khung ổn định để bắt đầu đếm', currentRect.x + currentRect.w / 2, currentRect.y - 15);
         }
       } else {
         holdStartTimeRef.current = null;
         updateCountdown(null);
+        resetFrameStability();
       }
     } else if (currentStep === 'aiming2') {
       if (bgCanvasRef.current) {
@@ -465,17 +559,29 @@ export default function App() {
         canvasCtx.restore();
       }
 
-      const frameData = getCurrentFrameData(results, canvas);
+      const frameData = frameModeRef.current === 'locked'
+        ? lockedFrameDataRef.current
+        : smoothFrameData(getCurrentFrameData(results, canvas));
       frameDataRef.current = frameData;
       syncHasFrame(frameData !== null);
 
       if (frameData) {
-        if (!holdStartTimeRef.current) {
-          holdStartTimeRef.current = Date.now();
+        const now = Date.now();
+        const stable = frameModeRef.current === 'locked' ? true : isFrameStable(frameData, now);
+        let elapsed = 0;
+        let progress = 0;
+
+        if (stable) {
+          if (!holdStartTimeRef.current) {
+            holdStartTimeRef.current = now;
+          }
+          elapsed = now - holdStartTimeRef.current;
+          progress = Math.min(elapsed / 3000, 1);
+          updateCountdown(Math.max(0, Math.ceil(3 - elapsed / 1000)));
+        } else {
+          holdStartTimeRef.current = null;
+          updateCountdown(null);
         }
-        const elapsed = Date.now() - holdStartTimeRef.current;
-        const progress = Math.min(elapsed / 3000, 1);
-        updateCountdown(Math.max(0, Math.ceil(3 - elapsed / 1000)));
 
         if (progress === 1 && !isCapturingRef.current) {
           isCapturingRef.current = true;
@@ -509,10 +615,16 @@ export default function App() {
         // Draw progress border
         if (progress > 0) {
           drawCaptureProgress(canvasCtx, currentRect, progress, elapsed);
+        } else if (frameModeRef.current === 'realtime') {
+          canvasCtx.fillStyle = '#00ffff';
+          canvasCtx.font = 'bold 20px sans-serif';
+          canvasCtx.textAlign = 'center';
+          canvasCtx.fillText('Giữ khung ổn định để bắt đầu đếm', currentRect.x + currentRect.w / 2, currentRect.y - 15);
         }
       } else {
         holdStartTimeRef.current = null;
         updateCountdown(null);
+        resetFrameStability();
       }
     }
   };
@@ -523,6 +635,7 @@ export default function App() {
       return;
     }
     isCapturingRef.current = true;
+    lockedFrameDataRef.current = frameDataRef.current;
 
     const bgCtx = bgCanvasRef.current.getContext('2d');
     if (bgCtx) {
@@ -535,6 +648,8 @@ export default function App() {
 
     bgPortalCenterRef.current = { x: frameDataRef.current.cx, y: frameDataRef.current.cy };
     capture1TimeRef.current = Date.now();
+    resetFrameStability();
+    smoothedFrameDataRef.current = null;
 
     // Reset refs for aiming2 auto-capture
     holdStartTimeRef.current = null;
@@ -594,6 +709,9 @@ export default function App() {
   const retryCamera = () => {
     setCameraError(null);
     setFinalImage(null);
+    lockedFrameDataRef.current = null;
+    smoothedFrameDataRef.current = null;
+    resetFrameStability();
     frameDataRef.current = null;
     holdStartTimeRef.current = null;
     isCapturingRef.current = false;
@@ -610,6 +728,9 @@ export default function App() {
     setCameraError(null);
     setFinalImage(null);
     syncHasFrame(false);
+    lockedFrameDataRef.current = null;
+    smoothedFrameDataRef.current = null;
+    resetFrameStability();
     frameDataRef.current = null;
     holdStartTimeRef.current = null;
     isCapturingRef.current = false;
@@ -620,10 +741,26 @@ export default function App() {
     stepRef.current = 'aiming1';
   };
 
+  const workflowStatus = cameraError
+    ? 'Camera lỗi'
+    : step === 'loading'
+      ? 'Đang khởi động'
+      : step === 'aiming1'
+        ? (hasFrame ? (countdown !== null ? 'Khung ổn định - đang đếm' : 'Đã nhận khung - giữ ổn định') : 'Đang tìm khung tay')
+        : step === 'aiming2'
+          ? (frameMode === 'locked'
+            ? (countdown !== null ? 'Khung khóa - đang đếm' : 'Khung đã khóa')
+            : (hasFrame ? (countdown !== null ? 'Khung realtime - đang đếm' : 'Đã nhận khung realtime') : 'Đang tìm khung realtime'))
+          : 'Hoàn tất';
+
   return (
     <main className="relative w-full h-screen bg-neutral-950 flex flex-col items-center justify-center overflow-hidden font-sans">
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {a11yStatus}
+      </div>
+
+      <div className="absolute top-6 left-6 z-50 rounded-full border border-cyan-400/40 bg-black/60 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-cyan-200 backdrop-blur">
+        {workflowStatus}
       </div>
 
       <div className="absolute top-6 right-6 z-50 flex gap-4">
@@ -659,6 +796,31 @@ export default function App() {
         >
           <h3 className="font-bold mb-4 text-sm text-neutral-300 uppercase tracking-wider">Cấu hình AI</h3>
           <div className="space-y-5">
+            <div>
+              <p className="mb-2 text-sm">Chế độ khung bước 2</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFrameMode('locked')}
+                  aria-pressed={frameMode === 'locked'}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    frameMode === 'locked' ? 'bg-cyan-600 text-white' : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                  }`}
+                >
+                  Locked
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFrameMode('realtime')}
+                  aria-pressed={frameMode === 'realtime'}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    frameMode === 'realtime' ? 'bg-cyan-600 text-white' : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                  }`}
+                >
+                  Realtime
+                </button>
+              </div>
+            </div>
             <div>
               <label htmlFor="detection-confidence" className="flex justify-between text-sm mb-2">
                 <span>Detection Confidence</span>
@@ -836,7 +998,11 @@ export default function App() {
         <div className="absolute top-10 left-0 right-0 flex justify-center pointer-events-none z-10">
           <div className="bg-black/70 text-white px-8 py-4 rounded-2xl backdrop-blur-md text-center max-w-md border border-white/10 shadow-2xl">
             <h2 className="font-bold text-xl text-emerald-400 mb-2 tracking-wide">Bước 2: Chụp xuyên không</h2>
-            <p className="text-sm text-neutral-300 leading-relaxed">Cảnh vật bên ngoài đã bị đóng băng. Hãy tạo dáng bên trong cổng và giữ yên 3 giây để tự động chụp.</p>
+            <p className="text-sm text-neutral-300 leading-relaxed">
+              {frameMode === 'locked'
+                ? 'Cảnh vật bên ngoài đã bị đóng băng. Khung đã khóa từ bước 1, hãy tạo dáng bên trong cổng và giữ yên 3 giây để tự động chụp.'
+                : 'Cảnh vật bên ngoài đã bị đóng băng. Hãy tạo lại khung bằng 2 tay, giữ ổn định 3 giây để tự động chụp.'}
+            </p>
           </div>
         </div>
       )}
