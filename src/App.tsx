@@ -754,12 +754,12 @@ export default function App() {
           : 'Hoàn tất';
 
   return (
-    <main className="relative w-full h-screen bg-neutral-950 flex flex-col items-center justify-center overflow-hidden font-sans">
+    <main className="app-shell relative flex h-screen w-full flex-col items-center justify-center overflow-hidden text-[var(--text-primary)]">
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {a11yStatus}
       </div>
 
-      <div className="absolute top-6 left-6 z-50 rounded-full border border-cyan-400/40 bg-black/60 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-cyan-200 backdrop-blur">
+      <div className="workflow-chip absolute left-6 top-6 z-50 rounded-full px-4 py-2 text-xs font-semibold uppercase text-cyan-100">
         {workflowStatus}
       </div>
 
@@ -767,18 +767,18 @@ export default function App() {
         <button
           type="button"
           onClick={cycleEffect}
-          className="flex items-center gap-2 px-4 py-3 bg-neutral-800/80 hover:bg-neutral-700 text-white rounded-full backdrop-blur transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+          className="icon-chip flex items-center gap-2 rounded-full px-4 py-3 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
           title="Đổi hiệu ứng cổng"
           aria-label={`Đổi hiệu ứng cổng, hiệu ứng hiện tại là ${portalEffect}`}
         >
           <Wand2 size={24} aria-hidden="true" />
-          <span className="font-bold text-sm uppercase tracking-wider text-cyan-400">{portalEffect}</span>
+          <span className="font-display text-sm font-bold uppercase tracking-wider text-amber-300">{portalEffect}</span>
         </button>
 
         <button
           type="button"
           onClick={() => setShowSettings(!showSettings)}
-          className="p-3 bg-neutral-800/80 hover:bg-neutral-700 text-white rounded-full backdrop-blur transition-colors shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+          className="icon-chip rounded-full p-3 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
           aria-label={showSettings ? 'Đóng cài đặt AI' : 'Mở cài đặt AI'}
           aria-expanded={showSettings}
           aria-controls="settings-panel"
@@ -792,19 +792,19 @@ export default function App() {
           id="settings-panel"
           role="region"
           aria-label="Cấu hình AI"
-          className="absolute top-20 right-6 bg-neutral-900/90 backdrop-blur border border-neutral-700 p-5 rounded-2xl z-50 text-white w-72 shadow-2xl"
+          className="settings-sheet absolute right-6 top-20 z-50 w-72 rounded-2xl p-5 text-white"
         >
-          <h3 className="font-bold mb-4 text-sm text-neutral-300 uppercase tracking-wider">Cấu hình AI</h3>
+          <h3 className="font-display mb-4 text-sm font-bold uppercase tracking-wider text-slate-200">Cấu hình AI</h3>
           <div className="space-y-5">
             <div>
-              <p className="mb-2 text-sm">Chế độ khung bước 2</p>
+              <p className="mb-2 text-sm text-slate-200">Chế độ khung bước 2</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setFrameMode('locked')}
                   aria-pressed={frameMode === 'locked'}
                   className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                    frameMode === 'locked' ? 'bg-cyan-600 text-white' : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                    frameMode === 'locked' ? 'bg-cyan-600 text-white' : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800'
                   }`}
                 >
                   Locked
@@ -814,7 +814,7 @@ export default function App() {
                   onClick={() => setFrameMode('realtime')}
                   aria-pressed={frameMode === 'realtime'}
                   className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                    frameMode === 'realtime' ? 'bg-cyan-600 text-white' : 'bg-neutral-800 text-neutral-200 hover:bg-neutral-700'
+                    frameMode === 'realtime' ? 'bg-cyan-600 text-white' : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800'
                   }`}
                 >
                   Realtime
@@ -824,7 +824,7 @@ export default function App() {
             <div>
               <label htmlFor="detection-confidence" className="flex justify-between text-sm mb-2">
                 <span>Detection Confidence</span>
-                <span className="text-blue-400 font-mono">{detectionConfidence.toFixed(2)}</span>
+                <span className="font-mono text-cyan-300">{detectionConfidence.toFixed(2)}</span>
               </label>
               <input
                 id="detection-confidence"
@@ -839,7 +839,7 @@ export default function App() {
             <div>
               <label htmlFor="tracking-confidence" className="flex justify-between text-sm mb-2">
                 <span>Tracking Confidence</span>
-                <span className="text-blue-400 font-mono">{trackingConfidence.toFixed(2)}</span>
+                <span className="font-mono text-cyan-300">{trackingConfidence.toFixed(2)}</span>
               </label>
               <input
                 id="tracking-confidence"
@@ -854,7 +854,7 @@ export default function App() {
             <div>
               <label htmlFor="distortion-intensity" className="flex justify-between text-sm mb-2">
                 <span>Distortion (Warp)</span>
-                <span className="text-blue-400 font-mono">{distortionIntensity.toFixed(1)}</span>
+                <span className="font-mono text-cyan-300">{distortionIntensity.toFixed(1)}</span>
               </label>
               <input
                 id="distortion-intensity"
@@ -874,14 +874,14 @@ export default function App() {
       <canvas ref={bgCanvasRef} className="hidden" aria-hidden="true" />
 
       {cameraError && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-red-400/40 bg-neutral-900 p-6 text-white shadow-2xl">
-            <h2 className="text-lg font-bold text-red-300">Không thể truy cập camera</h2>
-            <p className="mt-2 text-sm text-neutral-200">{cameraError}</p>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="settings-sheet w-full max-w-md rounded-2xl border border-rose-300/35 p-6 text-white">
+            <h2 className="font-display text-lg font-bold text-rose-300">Không thể truy cập camera</h2>
+            <p className="mt-2 text-sm text-slate-200">{cameraError}</p>
             <button
               type="button"
               onClick={retryCamera}
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-3 font-semibold text-white transition-colors hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900"
+              className="cta mt-5 inline-flex items-center gap-2 rounded-full bg-rose-600 px-5 py-3 font-semibold text-white hover:bg-rose-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
             >
               <RefreshCcw size={18} aria-hidden="true" />
               Thử lại camera
@@ -893,7 +893,7 @@ export default function App() {
       {step !== 'result' && (
         <canvas
           ref={canvasRef}
-          className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
+          className="surface-frame max-h-full max-w-full object-contain"
           aria-label="Canvas camera realtime với portal"
         />
       )}
@@ -902,13 +902,13 @@ export default function App() {
         <img
           src={finalImage}
           alt="Ảnh ghép portal cuối cùng"
-          className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
+          className="surface-frame max-h-full max-w-full object-contain"
         />
       )}
 
       {countdown !== null && step !== 'result' && !cameraError && (
         <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <span className="text-[15rem] font-black text-white drop-shadow-[0_0_40px_rgba(0,255,255,0.8)] animate-pulse motion-reduce:animate-none" aria-hidden="true">
+          <span className="countdown-digit text-[15rem] font-black text-white animate-pulse motion-reduce:animate-none" aria-hidden="true">
             {countdown}
           </span>
         </div>
@@ -916,7 +916,7 @@ export default function App() {
 
       <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-4 z-10">
         {step === 'loading' && (
-          <div className="text-white bg-black/60 px-6 py-3 rounded-full animate-pulse motion-reduce:animate-none border border-white/10 backdrop-blur-md" role="status" aria-live="polite">
+          <div className="workflow-chip rounded-full px-6 py-3 text-white animate-pulse motion-reduce:animate-none" role="status" aria-live="polite">
             Đang khởi động Camera & AI…
           </div>
         )}
@@ -926,10 +926,10 @@ export default function App() {
             type="button"
             onClick={capture1}
             disabled={!hasFrame || !!cameraError}
-            className={`flex items-center gap-2 px-8 py-4 rounded-full font-bold transition-colors duration-300 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
+            className={`cta inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
               hasFrame && !cameraError
-                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)] scale-105 motion-reduce:scale-100'
-                : 'bg-neutral-800 text-neutral-400 cursor-not-allowed border border-neutral-700'
+                ? 'cta-primary scale-105 motion-reduce:scale-100'
+                : 'cta-disabled'
             }`}
           >
             <CameraIcon size={24} aria-hidden="true" />
@@ -943,10 +943,10 @@ export default function App() {
               type="button"
               onClick={capture2}
               disabled={!hasFrame || !!cameraError}
-              className={`flex items-center gap-2 px-8 py-4 rounded-full font-bold transition-colors duration-300 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
+              className={`cta inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
                 hasFrame && !cameraError
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.6)] hover:scale-105 motion-reduce:hover:scale-100'
-                  : 'bg-neutral-800 text-neutral-400 cursor-not-allowed border border-neutral-700'
+                  ? 'cta-success hover:scale-105 motion-reduce:hover:scale-100'
+                  : 'cta-disabled'
               }`}
             >
               <CameraIcon size={24} aria-hidden="true" />
@@ -955,7 +955,7 @@ export default function App() {
             <button
               type="button"
               onClick={reset}
-              className="flex items-center gap-2 px-8 py-4 rounded-full font-bold bg-neutral-700 hover:bg-neutral-600 text-white shadow-[0_0_20px_rgba(0,0,0,0.6)] transition-colors duration-300 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+              className="cta cta-neutral inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
             >
               <RefreshCcw size={24} aria-hidden="true" />
               Chụp lại từ đầu
@@ -968,7 +968,7 @@ export default function App() {
             <a
               href={finalImage || '#'}
               download="xray-portal.png"
-              className="flex items-center gap-2 px-8 py-4 rounded-full font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)] transition-colors duration-300 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+              className="cta cta-success inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
             >
               <Download size={24} aria-hidden="true" />
               Tải ảnh xuống
@@ -976,7 +976,7 @@ export default function App() {
             <button
               type="button"
               onClick={reset}
-              className="flex items-center gap-2 px-8 py-4 rounded-full font-bold bg-white text-black hover:bg-gray-200 transition-colors duration-300 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+              className="cta cta-download inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none hover:scale-105 motion-reduce:hover:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
             >
               <RefreshCcw size={24} aria-hidden="true" />
               Chụp lại từ đầu
@@ -987,18 +987,18 @@ export default function App() {
 
       {step === 'aiming1' && (
         <div className="absolute top-10 left-0 right-0 flex justify-center pointer-events-none z-10">
-          <div className="bg-black/70 text-white px-8 py-4 rounded-2xl backdrop-blur-md text-center max-w-md border border-white/10 shadow-2xl">
-            <h2 className="font-bold text-xl text-blue-400 mb-2 tracking-wide">Bước 1: Tạo cổng không gian</h2>
-            <p className="text-sm text-neutral-300 leading-relaxed">Dùng ngón trỏ và ngón cái của 2 bàn tay tạo thành một hình chữ nhật. Giữ yên 3 giây để tự động chụp.</p>
+          <div className="stage-card max-w-md px-8 py-4 text-center text-white">
+            <h2 className="font-display mb-2 text-xl font-bold tracking-wide text-cyan-300">Bước 1: Tạo cổng không gian</h2>
+            <p className="text-sm leading-relaxed text-slate-200">Dùng ngón trỏ và ngón cái của 2 bàn tay tạo thành một hình chữ nhật. Giữ yên 3 giây để tự động chụp.</p>
           </div>
         </div>
       )}
 
       {step === 'aiming2' && (
         <div className="absolute top-10 left-0 right-0 flex justify-center pointer-events-none z-10">
-          <div className="bg-black/70 text-white px-8 py-4 rounded-2xl backdrop-blur-md text-center max-w-md border border-white/10 shadow-2xl">
-            <h2 className="font-bold text-xl text-emerald-400 mb-2 tracking-wide">Bước 2: Chụp xuyên không</h2>
-            <p className="text-sm text-neutral-300 leading-relaxed">
+          <div className="stage-card max-w-md px-8 py-4 text-center text-white">
+            <h2 className="font-display mb-2 text-xl font-bold tracking-wide text-emerald-300">Bước 2: Chụp xuyên không</h2>
+            <p className="text-sm leading-relaxed text-slate-200">
               {frameMode === 'locked'
                 ? 'Cảnh vật bên ngoài đã bị đóng băng. Khung đã khóa từ bước 1, hãy tạo dáng bên trong cổng và giữ yên 3 giây để tự động chụp.'
                 : 'Cảnh vật bên ngoài đã bị đóng băng. Hãy tạo lại khung bằng 2 tay, giữ ổn định 3 giây để tự động chụp.'}

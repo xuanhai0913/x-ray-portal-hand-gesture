@@ -1,4 +1,155 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap');
 @import "tailwindcss";
+
+:root {
+	--bg-void: #05070d;
+	--bg-ink: #0f1b30;
+	--panel: rgba(9, 15, 28, 0.78);
+	--panel-strong: rgba(7, 11, 22, 0.9);
+	--line-soft: rgba(148, 163, 184, 0.22);
+	--line-strong: rgba(56, 189, 248, 0.45);
+	--text-primary: #f8fafc;
+	--text-muted: #cbd5e1;
+	--accent-cyan: #22d3ee;
+	--accent-lime: #4ade80;
+	--accent-amber: #fbbf24;
+	--danger: #fb7185;
+	--shadow-deep: 0 30px 70px rgba(2, 6, 23, 0.55);
+	--radius-pill: 999px;
+	--radius-card: 20px;
+}
+
+html,
+body,
+#root {
+	min-height: 100%;
+}
+
+body {
+	margin: 0;
+	font-family: 'Be Vietnam Pro', sans-serif;
+	color: var(--text-primary);
+	background:
+		radial-gradient(1200px 500px at -10% -20%, rgba(34, 211, 238, 0.18), transparent 72%),
+		radial-gradient(900px 420px at 110% 10%, rgba(251, 191, 36, 0.14), transparent 70%),
+		linear-gradient(135deg, var(--bg-void), var(--bg-ink) 48%, #111827);
+}
+
+body::before {
+	content: "";
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	opacity: 0.22;
+	background-image:
+		linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+	background-size: 42px 42px;
+	mask-image: radial-gradient(circle at center, black, transparent 82%);
+}
+
+.font-display {
+	font-family: 'Chakra Petch', sans-serif;
+}
+
+.app-shell {
+	position: relative;
+	overflow: hidden;
+}
+
+.workflow-chip {
+	border: 1px solid var(--line-strong);
+	background: var(--panel);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow-deep);
+	font-family: 'Chakra Petch', sans-serif;
+	letter-spacing: 0.08em;
+}
+
+.icon-chip {
+	border: 1px solid var(--line-soft);
+	background: var(--panel);
+	backdrop-filter: blur(14px);
+	box-shadow: var(--shadow-deep);
+	transition: transform 220ms ease, border-color 220ms ease, background-color 220ms ease;
+}
+
+.icon-chip:hover {
+	transform: translateY(-1px);
+	border-color: var(--line-strong);
+	background: rgba(15, 23, 42, 0.92);
+}
+
+.settings-sheet {
+	border: 1px solid var(--line-soft);
+	background: var(--panel-strong);
+	backdrop-filter: blur(16px);
+	box-shadow: var(--shadow-deep);
+}
+
+.surface-frame {
+	border: 1px solid rgba(148, 163, 184, 0.22);
+	box-shadow: var(--shadow-deep);
+	border-radius: var(--radius-card);
+	background: rgba(2, 6, 23, 0.26);
+}
+
+.stage-card {
+	border: 1px solid var(--line-soft);
+	background: var(--panel);
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow-deep);
+	border-radius: var(--radius-card);
+}
+
+.cta {
+	border-radius: var(--radius-pill);
+	font-weight: 700;
+	backdrop-filter: blur(8px);
+	transition: transform 220ms ease, box-shadow 220ms ease, background-color 220ms ease, color 220ms ease;
+	box-shadow: 0 16px 35px rgba(2, 6, 23, 0.45);
+	font-family: 'Chakra Petch', sans-serif;
+	letter-spacing: 0.02em;
+}
+
+.cta:hover {
+	transform: translateY(-1px);
+}
+
+.cta-primary {
+	background: linear-gradient(135deg, #0284c7, #2563eb);
+	color: #f8fafc;
+}
+
+.cta-success {
+	background: linear-gradient(135deg, #0f766e, #059669);
+	color: #f8fafc;
+}
+
+.cta-neutral {
+	background: rgba(30, 41, 59, 0.92);
+	color: #e2e8f0;
+	border: 1px solid var(--line-soft);
+}
+
+.cta-download {
+	background: linear-gradient(135deg, #f8fafc, #cbd5e1);
+	color: #0f172a;
+}
+
+.cta-disabled {
+	background: rgba(30, 41, 59, 0.58);
+	color: #94a3b8;
+	border: 1px solid rgba(100, 116, 139, 0.45);
+	cursor: not-allowed;
+	box-shadow: none;
+	transform: none;
+}
+
+.countdown-digit {
+	font-family: 'Chakra Petch', sans-serif;
+	text-shadow: 0 0 36px rgba(34, 211, 238, 0.85);
+}
 
 @media (prefers-reduced-motion: reduce) {
 	html:focus-within {
