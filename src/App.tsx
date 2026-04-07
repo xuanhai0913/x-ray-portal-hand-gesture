@@ -920,6 +920,21 @@ export default function App() {
         {workflowStatus}
       </div>
 
+      <nav
+        className="absolute left-6 top-36 z-50 flex flex-wrap items-center gap-2"
+        aria-label="Chọn kiểu chụp"
+      >
+        <a href="/" className="workflow-chip rounded-full border-cyan-300 px-4 py-2 text-[11px] font-semibold uppercase text-cyan-100">
+          Xray /
+        </a>
+        <a href="/photoboth" className="workflow-chip rounded-full px-4 py-2 text-[11px] font-semibold uppercase text-slate-100 hover:text-cyan-100">
+          /photoboth
+        </a>
+        <a href="/blast-animation" className="workflow-chip rounded-full px-4 py-2 text-[11px] font-semibold uppercase text-slate-100 hover:text-amber-100">
+          /blast-animation
+        </a>
+      </nav>
+
       <div className="absolute top-6 right-6 z-50 flex gap-4">
         <button
           type="button"
