@@ -759,7 +759,21 @@ export default function App() {
         {a11yStatus}
       </div>
 
-      <div className="workflow-chip absolute left-6 top-6 z-50 rounded-full px-4 py-2 text-xs font-semibold uppercase text-cyan-100">
+      <a
+        href="https://hailamdev.space"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="author-chip absolute left-6 top-6 z-50"
+        aria-label="Tác giả Nguyen Xuan Hai - mở hailamdev.space"
+      >
+        <img src="/Logo.jpg" alt="Logo Nguyen Xuan Hai" className="author-logo" />
+        <span className="text-left leading-tight">
+          <span className="font-display block text-[11px] uppercase tracking-[0.14em] text-slate-400">Author</span>
+          <span className="block text-sm font-semibold text-slate-100">Nguyen Xuan Hai</span>
+        </span>
+      </a>
+
+      <div className="workflow-chip absolute left-6 top-24 z-50 rounded-full px-4 py-2 text-xs font-semibold uppercase text-cyan-100">
         {workflowStatus}
       </div>
 
@@ -1006,6 +1020,21 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <footer className="absolute bottom-3 left-0 right-0 z-20 flex justify-center px-4">
+        <p className="text-center text-xs text-slate-300/90">
+          Built by Nguyen Xuan Hai ·
+          {' '}
+          <a
+            href="https://hailamdev.space"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="author-link"
+          >
+            hailamdev.space
+          </a>
+        </p>
+      </footer>
     </main>
   );
 }

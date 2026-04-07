@@ -66,6 +66,45 @@ body::before {
 	letter-spacing: 0.08em;
 }
 
+.author-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.75rem;
+	border: 1px solid var(--line-soft);
+	background: var(--panel-strong);
+	padding: 0.45rem 0.8rem;
+	border-radius: 14px;
+	backdrop-filter: blur(12px);
+	box-shadow: var(--shadow-deep);
+	transition: transform 220ms ease, border-color 220ms ease;
+	text-decoration: none;
+}
+
+.author-chip:hover {
+	transform: translateY(-1px);
+	border-color: var(--line-strong);
+}
+
+.author-logo {
+	height: 34px;
+	width: 34px;
+	border-radius: 10px;
+	object-fit: cover;
+	border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.author-link {
+	color: var(--accent-cyan);
+	text-decoration: none;
+	border-bottom: 1px dotted rgba(34, 211, 238, 0.55);
+	transition: color 180ms ease, border-color 180ms ease;
+}
+
+.author-link:hover {
+	color: #a5f3fc;
+	border-color: rgba(165, 243, 252, 0.9);
+}
+
 .icon-chip {
 	border: 1px solid var(--line-soft);
 	background: var(--panel);
