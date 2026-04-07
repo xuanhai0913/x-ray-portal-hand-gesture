@@ -666,11 +666,9 @@ export default function App() {
         drawWarpedPolygon(canvasCtx, polygon, angle, distortionIntensityRef.current);
         canvasCtx.clip();
 
-        // Removed XRAY_FILTER for aiming2 to show normal camera
-        
         canvasCtx.translate(canvas.width, 0);
         canvasCtx.scale(-1, 1);
-        canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+        drawPortalEffect(canvasCtx, results.image, portalEffectRef.current, canvas.width, canvas.height);
         canvasCtx.restore();
 
         // Calculate pulse effect for border
@@ -754,12 +752,10 @@ export default function App() {
       finalCtx.save();
       drawWarpedPolygon(finalCtx, polygon, angle, distortionIntensityRef.current);
       finalCtx.clip();
-      
-      // Removed XRAY_FILTER for capture2 to show normal camera
-      
+
       finalCtx.translate(canvasRef.current.width, 0);
       finalCtx.scale(-1, 1);
-      finalCtx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      drawPortalEffect(finalCtx, videoRef.current, portalEffectRef.current, canvasRef.current.width, canvasRef.current.height);
       finalCtx.restore();
 
       drawFrameBorder(finalCtx, polygon, angle, 1, 4, activePreset);
