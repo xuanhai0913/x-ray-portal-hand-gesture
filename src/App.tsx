@@ -437,7 +437,7 @@ export default function App() {
     if (!canvas || !video) return;
 
     let canvasCtx = canvasCtxRef.current;
-    if (!canvasCtx) {
+    if (!canvasCtx || canvasCtx.canvas !== canvas) {
       canvasCtx = canvas.getContext('2d');
       if (!canvasCtx) return;
       canvasCtxRef.current = canvasCtx;
