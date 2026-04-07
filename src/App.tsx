@@ -6,6 +6,7 @@ import { Camera as CameraIcon, RefreshCcw, Settings, Download, Wand2 } from 'luc
 type Step = 'loading' | 'aiming1' | 'aiming2' | 'result';
 type FrameMode = 'locked' | 'realtime';
 type PortalEffectId = 'xray' | 'scanlines' | 'glitch' | 'chromatic' | 'neon' | 'thermal' | 'noir';
+type CaptureFilterId = 'none' | 'smooth' | 'softglow' | 'bunny';
 
 interface Rect {
   x: number;
@@ -35,6 +36,11 @@ interface EffectPreset {
   lineWidthBoost?: number;
 }
 
+interface CaptureFilterPreset {
+  id: CaptureFilterId;
+  label: string;
+}
+
 const XRAY_FILTER = 'invert(100%) sepia(100%) saturate(300%) hue-rotate(130deg) contrast(150%) brightness(120%)';
 const FRAME_SMOOTHING_ALPHA = 0.35;
 const STABILITY_SPEED_THRESHOLD = 80;
@@ -46,6 +52,12 @@ const EFFECT_PRESETS: EffectPreset[] = [
   { id: 'neon', label: 'Neon', accentRgb: '74, 222, 128', lineWidthBoost: 1.2 },
   { id: 'thermal', label: 'Thermal', accentRgb: '249, 115, 22', lineWidthBoost: 1.15 },
   { id: 'noir', label: 'Noir', accentRgb: '226, 232, 240', borderDash: [14, 6] },
+];
+const CAPTURE_FILTER_PRESETS: CaptureFilterPreset[] = [
+  { id: 'none', label: 'Natural' },
+  { id: 'smooth', label: 'Smooth Skin' },
+  { id: 'softglow', label: 'Soft Glow' },
+  { id: 'bunny', label: 'Bunny Ears' },
 ];
 
 const getEffectPreset = (effect: PortalEffectId): EffectPreset => {
@@ -66,6 +78,7 @@ export default function App() {
   const [distortionIntensity, setDistortionIntensity] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
   const [portalEffect, setPortalEffect] = useState<PortalEffectId>('xray');
+  const [captureFilter, setCaptureFilter] = useState<CaptureFilterId>('none');
   const [frameMode, setFrameMode] = useState<FrameMode>('locked');
 
   const stepRef = useRef<Step>('loading');
@@ -81,6 +94,7 @@ export default function App() {
   const capture1TimeRef = useRef<number | null>(null);
   const distortionIntensityRef = useRef(0.5);
   const portalEffectRef = useRef<PortalEffectId>('xray');
+  const captureFilterRef = useRef<CaptureFilterId>('none');
   const countdownRef = useRef<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -176,6 +190,10 @@ export default function App() {
     frameModeRef.current = frameMode;
   }, [frameMode]);
 
+  useEffect(() => {
+    captureFilterRef.current = captureFilter;
+  }, [captureFilter]);
+
   const handleDistortionChange = (val: number) => {
     setDistortionIntensity(val);
     distortionIntensityRef.current = val;
@@ -184,6 +202,11 @@ export default function App() {
   const setPortalEffectPreset = (effect: PortalEffectId) => {
     setPortalEffect(effect);
     portalEffectRef.current = effect;
+  };
+
+  const setCaptureFilterPreset = (filter: CaptureFilterId) => {
+    setCaptureFilter(filter);
+    captureFilterRef.current = filter;
   };
 
   const cycleEffect = () => {
@@ -478,6 +501,82 @@ export default function App() {
     ctx.setLineDash([]);
   };
 
+  const applyCaptureFilterPass = (
+    ctx: CanvasRenderingContext2D,
+    filter: CaptureFilterId,
+    width: number,
+    height: number,
+  ) => {
+    if (filter === 'none' || filter === 'bunny') return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    if (filter === 'smooth') {
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = 'rgba(255, 220, 200, 1)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.globalAlpha = 0.1;
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, 'rgba(255, 245, 235, 0.7)');
+      grad.addColorStop(1, 'rgba(255, 214, 186, 0.35)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+    } else if (filter === 'softglow') {
+      ctx.globalAlpha = 0.18;
+      const glow = ctx.createRadialGradient(width * 0.5, height * 0.45, width * 0.08, width * 0.5, height * 0.45, width * 0.65);
+      glow.addColorStop(0, 'rgba(255, 240, 220, 0.65)');
+      glow.addColorStop(1, 'rgba(255, 240, 220, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  };
+
+  const drawBunnyEarFilter = (
+    ctx: CanvasRenderingContext2D,
+    rect: Rect,
+    accentRgb: string,
+  ) => {
+    const centerX = rect.x + rect.w / 2;
+    const topY = rect.y + 8;
+    const earHeight = Math.max(46, rect.h * 0.45);
+    const earWidth = Math.max(20, rect.w * 0.11);
+    const gap = Math.max(22, rect.w * 0.14);
+
+    const drawEar = (x: number, rotation: number) => {
+      ctx.save();
+      ctx.translate(x, topY);
+      ctx.rotate(rotation);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, earWidth, earHeight, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(251, 113, 133, 0.88)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, earWidth * 0.48, earHeight * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    };
+
+    drawEar(centerX - gap, -0.35);
+    drawEar(centerX + gap, 0.35);
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(${accentRgb}, 0.8)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(centerX, rect.y + rect.h * 0.18, Math.max(16, rect.w * 0.07), 0, Math.PI, true);
+    ctx.stroke();
+    ctx.restore();
+  };
+
   const drawWarpedPolygon = (ctx: CanvasRenderingContext2D, polygon: Point[], angle: number, intensity: number) => {
     ctx.beginPath();
     ctx.moveTo(polygon[0].x, polygon[0].y);
@@ -586,6 +685,7 @@ export default function App() {
         canvasCtx.scale(-1, 1);
         
         drawPortalEffect(canvasCtx, results.image, portalEffectRef.current, canvas.width, canvas.height);
+        applyCaptureFilterPass(canvasCtx, captureFilterRef.current, canvas.width, canvas.height);
         
         canvasCtx.restore();
 
@@ -606,6 +706,10 @@ export default function App() {
           canvasCtx.font = 'bold 20px sans-serif';
           canvasCtx.textAlign = 'center';
           canvasCtx.fillText('Giữ khung ổn định để bắt đầu đếm', currentRect.x + currentRect.w / 2, currentRect.y - 15);
+        }
+
+        if (captureFilterRef.current === 'bunny') {
+          drawBunnyEarFilter(canvasCtx, currentRect, activePreset.accentRgb);
         }
       } else {
         holdStartTimeRef.current = null;
@@ -710,7 +814,13 @@ export default function App() {
       bgCtx.translate(bgCanvasRef.current.width, 0);
       bgCtx.scale(-1, 1);
       bgCtx.drawImage(videoRef.current, 0, 0, bgCanvasRef.current.width, bgCanvasRef.current.height);
+      applyCaptureFilterPass(bgCtx, captureFilterRef.current, bgCanvasRef.current.width, bgCanvasRef.current.height);
       bgCtx.restore();
+
+      if (captureFilterRef.current === 'bunny') {
+        const activePreset = getEffectPreset(portalEffectRef.current);
+        drawBunnyEarFilter(bgCtx, frameDataRef.current.rect, activePreset.accentRgb);
+      }
     }
 
     bgPortalCenterRef.current = { x: frameDataRef.current.cx, y: frameDataRef.current.cy };
@@ -896,6 +1006,27 @@ export default function App() {
                         style={{ backgroundColor: `rgb(${preset.accentRgb})` }}
                         aria-hidden="true"
                       />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-sm text-slate-200">Filter Chụp Lần 1</p>
+              <div className="grid grid-cols-2 gap-2">
+                {CAPTURE_FILTER_PRESETS.map((preset) => {
+                  const isActive = preset.id === captureFilter;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setCaptureFilterPreset(preset.id)}
+                      aria-pressed={isActive}
+                      className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
+                        isActive ? 'bg-cyan-600 text-white' : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      {preset.label}
                     </button>
                   );
                 })}
