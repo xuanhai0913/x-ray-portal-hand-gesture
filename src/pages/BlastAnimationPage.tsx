@@ -76,9 +76,25 @@ const clipAnnulus = (
   ctx.clip('evenodd');
 };
 
+const clipPolarSlice = (
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  innerRadius: number,
+  outerRadius: number,
+  startAngle: number,
+  endAngle: number,
+) => {
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, outerRadius, startAngle, endAngle);
+  ctx.arc(centerX, centerY, innerRadius, endAngle, startAngle, true);
+  ctx.closePath();
+  ctx.clip();
+};
+
 const drawBlastEffect = (
   ctx: CanvasRenderingContext2D,
-  image: CanvasImageSource,
+  mirroredFrame: CanvasImageSource,
   width: number,
   height: number,
   progress: number,
@@ -86,31 +102,77 @@ const drawBlastEffect = (
   centerY: number,
 ) => {
   const influenceRadius = 95 + progress * 210;
-  const ringCount = 18;
+  const ringCount = 12;
+  const sectorCount = 20;
 
-  // Localized vortex: only annulus zones near hand center are transformed.
+  // Cinematic local lensing: twist and pull only near the blast center.
   for (let layer = ringCount - 1; layer >= 0; layer -= 1) {
     const outer = influenceRadius * ((layer + 1) / ringCount);
     const inner = influenceRadius * (layer / ringCount);
-    const radialFactor = 1 - (inner + outer) / 2 / influenceRadius;
-    const ringSpin = progress * radialFactor * Math.PI * 2.7;
-    const ringScale = 1 - progress * radialFactor * 0.45;
+    const radialFactor = 1 - ((inner + outer) * 0.5) / influenceRadius;
+    const pull = progress * radialFactor * 28;
+    const squeeze = 1 - progress * radialFactor * 0.18;
 
-    ctx.save();
-    clipAnnulus(ctx, centerX, centerY, inner, outer);
-    ctx.globalAlpha = 0.08 + radialFactor * 0.22;
-    ctx.globalCompositeOperation = 'lighter';
+    for (let sector = 0; sector < sectorCount; sector += 1) {
+      const start = (sector / sectorCount) * Math.PI * 2;
+      const end = ((sector + 1) / sectorCount) * Math.PI * 2;
+      const mid = (start + end) * 0.5;
+      const sectorNoise = 1 + 0.22 * Math.sin(progress * 11 + sector * 0.85);
+      const spin = progress * radialFactor * Math.PI * 0.45 * sectorNoise;
+      const driftX = -Math.cos(mid) * pull;
+      const driftY = -Math.sin(mid) * pull;
 
-    ctx.translate(centerX, centerY);
-    ctx.rotate(ringSpin);
-    ctx.scale(ringScale, ringScale);
-    ctx.translate(-centerX, -centerY);
-
-    ctx.filter = `contrast(${110 + radialFactor * 60}%) saturate(${120 + radialFactor * 80}%)`;
-    drawMirrored(ctx, image, width, height);
-    ctx.filter = 'none';
-    ctx.restore();
+      ctx.save();
+      clipPolarSlice(ctx, centerX, centerY, inner, outer, start, end);
+      ctx.globalAlpha = 0.045 + radialFactor * 0.16;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.translate(centerX, centerY);
+      ctx.rotate(spin);
+      ctx.scale(squeeze, squeeze);
+      ctx.translate(-centerX, -centerY);
+      ctx.translate(driftX, driftY);
+      ctx.filter = `contrast(${112 + radialFactor * 70}%) saturate(${118 + radialFactor * 95}%)`;
+      ctx.drawImage(mirroredFrame, 0, 0, width, height);
+      ctx.filter = 'none';
+      ctx.restore();
+    }
   }
+
+  const coreRadius = 24 + progress * 36;
+  const lensRadius = influenceRadius * 0.62;
+
+  // Chromatic lens pass close to core for black-hole refraction feel.
+  ctx.save();
+  clipAnnulus(ctx, centerX, centerY, coreRadius * 0.92, lensRadius);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.06 + progress * 0.1;
+  ctx.translate(-3.4 * progress, 0);
+  ctx.drawImage(mirroredFrame, 0, 0, width, height);
+  ctx.restore();
+
+  ctx.save();
+  clipAnnulus(ctx, centerX, centerY, coreRadius * 0.92, lensRadius);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.05 + progress * 0.09;
+  ctx.translate(3.2 * progress, 0);
+  ctx.drawImage(mirroredFrame, 0, 0, width, height);
+  ctx.restore();
+
+  // Event horizon core.
+  ctx.save();
+  const coreGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius * 2.1);
+  coreGlow.addColorStop(0, 'rgba(2, 6, 23, 0.95)');
+  coreGlow.addColorStop(0.45, 'rgba(2, 6, 23, 0.78)');
+  coreGlow.addColorStop(1, 'rgba(2, 6, 23, 0)');
+  ctx.fillStyle = coreGlow;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, coreRadius * 2.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.98)';
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
@@ -124,10 +186,11 @@ const drawBlastEffect = (
   ctx.arc(centerX, centerY, influenceRadius * 1.5, 0, Math.PI * 2);
   ctx.fill();
 
+  // Accretion ring.
   ctx.strokeStyle = `rgba(251, 191, 36, ${0.88 - progress * 0.55})`;
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.arc(centerX, centerY, influenceRadius, 0, Math.PI * 2);
+  ctx.ellipse(centerX, centerY, influenceRadius, influenceRadius * 0.58, progress * Math.PI * 0.5, 0, Math.PI * 2);
   ctx.stroke();
 
   for (let i = 0; i < 22; i += 1) {
@@ -156,6 +219,8 @@ export default function BlastAnimationPage() {
   const cameraRef = useRef<Camera | null>(null);
   const handsRef = useRef<Hands | null>(null);
   const canvasCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const frameBufferRef = useRef<HTMLCanvasElement | null>(null);
+  const frameBufferCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   const blastStartRef = useRef<number | null>(null);
   const blastCenterRef = useRef<{ x: number; y: number } | null>(null);
   const lastTriggerRef = useRef(0);
@@ -217,8 +282,28 @@ export default function BlastAnimationPage() {
             canvas.height = video.videoHeight;
           }
 
+          if (!frameBufferRef.current) {
+            frameBufferRef.current = document.createElement('canvas');
+          }
+
+          if (!frameBufferCtxRef.current || frameBufferCtxRef.current.canvas !== frameBufferRef.current) {
+            frameBufferCtxRef.current = frameBufferRef.current.getContext('2d');
+          }
+
+          const frameBuffer = frameBufferRef.current;
+          const frameBufferCtx = frameBufferCtxRef.current;
+          if (!frameBuffer || !frameBufferCtx) return;
+
+          if (frameBuffer.width !== canvas.width || frameBuffer.height !== canvas.height) {
+            frameBuffer.width = canvas.width;
+            frameBuffer.height = canvas.height;
+          }
+
+          frameBufferCtx.clearRect(0, 0, frameBuffer.width, frameBuffer.height);
+          drawMirrored(frameBufferCtx, results.image, frameBuffer.width, frameBuffer.height);
+
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          drawMirrored(ctx, results.image, canvas.width, canvas.height);
+          ctx.drawImage(frameBuffer, 0, 0);
 
           const now = Date.now();
           const blastCenter = detectBlastCenter(results);
@@ -245,7 +330,7 @@ export default function BlastAnimationPage() {
             } else {
               drawBlastEffect(
                 ctx,
-                results.image,
+                frameBuffer,
                 canvas.width,
                 canvas.height,
                 progress,
@@ -288,6 +373,8 @@ export default function BlastAnimationPage() {
         handsRef.current.close();
         handsRef.current = null;
       }
+      frameBufferRef.current = null;
+      frameBufferCtxRef.current = null;
       canvasCtxRef.current = null;
     };
   }, [initAttempt]);
