@@ -1,0 +1,7 @@
+{
+  "name": "X-Ray Portal Hand Gesture",
+  "description": "An interactive webcam app that uses hand gestures to create an X-ray portal and composite images across time.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
