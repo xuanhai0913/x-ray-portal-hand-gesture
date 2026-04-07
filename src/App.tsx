@@ -569,10 +569,32 @@ export default function App() {
     width: number,
     height: number,
     faceBox: FaceBox | null,
+    fallbackRect?: Rect,
   ) => {
     if (filter !== 'beauty') return;
 
-    const targetFace = faceBox;
+    const resolveBeautyTarget = (): FaceBox | null => {
+      if (faceBox) {
+        return faceBox;
+      }
+
+      if (fallbackRect) {
+        const x = Math.max(0, fallbackRect.x + fallbackRect.w * 0.14);
+        const y = Math.max(0, fallbackRect.y + fallbackRect.h * 0.04);
+        const w = Math.min(width - x, fallbackRect.w * 0.72);
+        const h = Math.min(height - y, fallbackRect.h * 0.9);
+        return w > 1 && h > 1 ? { x, y, w, h } : null;
+      }
+
+      return {
+        x: width * 0.29,
+        y: height * 0.16,
+        w: width * 0.42,
+        h: height * 0.5,
+      };
+    };
+
+    const targetFace = resolveBeautyTarget();
     if (!targetFace) return;
 
     const padX = targetFace.w * 0.25;
@@ -589,15 +611,19 @@ export default function App() {
     ctx.ellipse(cx, cy, fw * 0.5, fh * 0.55, 0, 0, Math.PI * 2);
     ctx.clip();
 
-    ctx.filter = 'blur(10px) saturate(108%) brightness(106%)';
-    ctx.globalAlpha = 0.52;
+    ctx.filter = 'blur(14px) saturate(116%) brightness(109%)';
+    ctx.globalAlpha = 0.72;
+    ctx.drawImage(image, 0, 0, width, height);
+
+    ctx.filter = 'contrast(106%) brightness(105%)';
+    ctx.globalAlpha = 0.2;
     ctx.drawImage(image, 0, 0, width, height);
 
     ctx.filter = 'none';
     ctx.globalCompositeOperation = 'soft-light';
-    ctx.globalAlpha = 0.2;
+    ctx.globalAlpha = 0.28;
     const tone = ctx.createRadialGradient(cx, cy, fw * 0.1, cx, cy, fw * 0.62);
-    tone.addColorStop(0, 'rgba(255, 233, 214, 0.55)');
+    tone.addColorStop(0, 'rgba(255, 233, 214, 0.68)');
     tone.addColorStop(1, 'rgba(255, 233, 214, 0)');
     ctx.fillStyle = tone;
     ctx.fillRect(fx, fy, fw, fh);
@@ -722,6 +748,7 @@ export default function App() {
           canvas.width,
           canvas.height,
           faceBoxRef.current,
+          currentRect,
         );
         
         canvasCtx.restore();
@@ -854,6 +881,7 @@ export default function App() {
         bgCanvasRef.current.width,
         bgCanvasRef.current.height,
         faceBoxRef.current,
+        frameDataRef.current.rect,
       );
       bgCtx.restore();
     }
