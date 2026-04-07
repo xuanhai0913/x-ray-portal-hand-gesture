@@ -6,6 +6,7 @@ import { Camera as CameraIcon, RefreshCcw, Settings, Download, Wand2 } from 'luc
 type Step = 'loading' | 'aiming1' | 'aiming2' | 'result';
 type FrameMode = 'locked' | 'realtime';
 type PortalEffectId = 'xray' | 'scanlines' | 'glitch' | 'chromatic' | 'neon' | 'thermal' | 'noir';
+type CaptureMode = 'single' | 'photobooth3';
 
 interface Rect {
   x: number;
@@ -38,6 +39,10 @@ interface EffectPreset {
 const XRAY_FILTER = 'invert(100%) sepia(100%) saturate(300%) hue-rotate(130deg) contrast(150%) brightness(120%)';
 const FRAME_SMOOTHING_ALPHA = 0.35;
 const STABILITY_SPEED_THRESHOLD = 80;
+const CHI_BLAST_DURATION_MS = 1200;
+const CHI_BLAST_COOLDOWN_MS = 1700;
+const PHOTOBOOTH_SHOTS = 3;
+const PHOTOBOOTH_GAP_MS = 750;
 const EFFECT_PRESETS: EffectPreset[] = [
   { id: 'xray', label: 'Xray', accentRgb: '34, 211, 238' },
   { id: 'scanlines', label: 'Scanline', accentRgb: '251, 191, 36', borderDash: [12, 8] },
@@ -67,6 +72,10 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [portalEffect, setPortalEffect] = useState<PortalEffectId>('xray');
   const [frameMode, setFrameMode] = useState<FrameMode>('locked');
+  const [captureMode, setCaptureMode] = useState<CaptureMode>('single');
+  const [photoBoothFrames, setPhotoBoothFrames] = useState<string[]>([]);
+  const [photoBoothState, setPhotoBoothState] = useState<'idle' | 'capturing'>('idle');
+  const [chiBlastActive, setChiBlastActive] = useState(false);
   const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
@@ -86,6 +95,8 @@ export default function App() {
   const distortionIntensityRef = useRef(0.5);
   const portalEffectRef = useRef<PortalEffectId>('xray');
   const countdownRef = useRef<number | null>(null);
+  const chiBlastStartRef = useRef<number | null>(null);
+  const chiBlastLastTriggerRef = useRef<number>(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -189,6 +200,10 @@ export default function App() {
     setPortalEffect(effect);
     portalEffectRef.current = effect;
   };
+
+  const wait = (ms: number) => new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 
   const cycleEffect = () => {
     const currentIndex = EFFECT_PRESETS.findIndex((preset) => preset.id === portalEffect);
@@ -331,6 +346,56 @@ export default function App() {
     lastStabilitySampleRef.current = null;
   };
 
+  const normalizedDistance = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
+
+  const isFistLike = (hand: { x: number; y: number; z: number }[]): boolean => {
+    const wrist = hand[0];
+    const indexMcp = hand[5];
+    const pinkyMcp = hand[17];
+    const palmWidth = Math.max(0.06, normalizedDistance(indexMcp, pinkyMcp));
+    const tipIndices = [8, 12, 16, 20];
+    const avgTipToWrist = tipIndices.reduce((sum, idx) => {
+      return sum + normalizedDistance(hand[idx], wrist);
+    }, 0) / tipIndices.length;
+
+    return avgTipToWrist / palmWidth < 1.45;
+  };
+
+  const detectChiBlastGesture = (results: Results): boolean => {
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length !== 2) {
+      return false;
+    }
+
+    const [handA, handB] = results.multiHandLandmarks;
+    if (!isFistLike(handA) || !isFistLike(handB)) {
+      return false;
+    }
+
+    const centerA = handA[9];
+    const centerB = handB[9];
+    const handDistance = normalizedDistance(centerA, centerB);
+    return handDistance < 0.18;
+  };
+
+  const getChiBlastProgress = (now: number): number => {
+    if (!chiBlastStartRef.current) {
+      return 0;
+    }
+
+    const progress = (now - chiBlastStartRef.current) / CHI_BLAST_DURATION_MS;
+    if (progress >= 1) {
+      chiBlastStartRef.current = null;
+      if (chiBlastActive) {
+        setChiBlastActive(false);
+      }
+      return 0;
+    }
+
+    return Math.max(0, progress);
+  };
+
   const isFrameStable = (frameData: FrameData, now: number): boolean => {
     const lastSample = lastStabilitySampleRef.current;
     if (!lastSample) {
@@ -463,6 +528,98 @@ export default function App() {
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, width, height);
       ctx.filter = 'none';
+    }
+  };
+
+  const drawChiBlastAura = (
+    canvasCtx: CanvasRenderingContext2D,
+    centerX: number,
+    centerY: number,
+    progress: number,
+    accentRgb: string,
+  ) => {
+    const ringRadius = 55 + progress * 120;
+    const pulseAlpha = 0.8 - progress * 0.7;
+
+    canvasCtx.save();
+    canvasCtx.globalCompositeOperation = 'screen';
+
+    const radial = canvasCtx.createRadialGradient(centerX, centerY, 0, centerX, centerY, ringRadius * 1.4);
+    radial.addColorStop(0, `rgba(${accentRgb}, ${0.22 + pulseAlpha * 0.2})`);
+    radial.addColorStop(0.6, `rgba(${accentRgb}, ${0.2 + pulseAlpha * 0.12})`);
+    radial.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    canvasCtx.fillStyle = radial;
+    canvasCtx.beginPath();
+    canvasCtx.arc(centerX, centerY, ringRadius * 1.45, 0, Math.PI * 2);
+    canvasCtx.fill();
+
+    canvasCtx.strokeStyle = `rgba(${accentRgb}, ${Math.max(0.12, pulseAlpha)})`;
+    canvasCtx.lineWidth = 3;
+    canvasCtx.beginPath();
+    canvasCtx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
+    canvasCtx.stroke();
+
+    for (let i = 0; i < 16; i++) {
+      const theta = progress * 8 + i * (Math.PI / 8);
+      const particleRadius = ringRadius * (0.72 + (i % 3) * 0.2);
+      const px = centerX + Math.cos(theta) * particleRadius;
+      const py = centerY + Math.sin(theta) * particleRadius;
+      canvasCtx.fillStyle = `rgba(${accentRgb}, ${0.55 - progress * 0.4})`;
+      canvasCtx.beginPath();
+      canvasCtx.arc(px, py, 2.4 + (i % 2), 0, Math.PI * 2);
+      canvasCtx.fill();
+    }
+
+    canvasCtx.restore();
+  };
+
+  const drawCompositePortalFrame = (
+    targetCtx: CanvasRenderingContext2D,
+    frameData: FrameData,
+    sourceImage: CanvasImageSource,
+    chiBlastProgress = 0,
+  ) => {
+    const canvasWidth = targetCtx.canvas.width;
+    const canvasHeight = targetCtx.canvas.height;
+
+    targetCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    if (bgCanvasRef.current) {
+      targetCtx.save();
+      if (bgPortalCenterRef.current) {
+        const { x, y } = bgPortalCenterRef.current;
+        targetCtx.translate(x, y);
+        targetCtx.scale(1.15, 1.15);
+        targetCtx.translate(-x, -y);
+      }
+      targetCtx.drawImage(bgCanvasRef.current, 0, 0);
+      targetCtx.restore();
+    }
+
+    targetCtx.save();
+    drawWarpedPolygon(targetCtx, frameData.polygon, frameData.angle, distortionIntensityRef.current);
+    targetCtx.clip();
+
+    targetCtx.translate(canvasWidth, 0);
+    targetCtx.scale(-1, 1);
+
+    if (chiBlastProgress > 0) {
+      const mirroredCx = canvasWidth - frameData.cx;
+      const mirroredCy = frameData.cy;
+      const suctionScale = Math.max(0.5, 1 - chiBlastProgress * 0.5);
+      const spin = chiBlastProgress * Math.PI * 3.5;
+      targetCtx.translate(mirroredCx, mirroredCy);
+      targetCtx.rotate(spin);
+      targetCtx.scale(suctionScale, suctionScale);
+      targetCtx.translate(-mirroredCx, -mirroredCy);
+    }
+
+    drawPortalEffect(targetCtx, sourceImage, portalEffectRef.current, canvasWidth, canvasHeight);
+    targetCtx.restore();
+
+    if (chiBlastProgress > 0) {
+      const activePreset = getEffectPreset(portalEffectRef.current);
+      drawChiBlastAura(targetCtx, frameData.cx, frameData.cy, chiBlastProgress, activePreset.accentRgb);
     }
   };
 
@@ -698,6 +855,14 @@ export default function App() {
         canvasCtx.restore();
       }
 
+      const now = Date.now();
+      const chiBlastProgress = getChiBlastProgress(now);
+      if (detectChiBlastGesture(results) && now - chiBlastLastTriggerRef.current > CHI_BLAST_COOLDOWN_MS) {
+        chiBlastLastTriggerRef.current = now;
+        chiBlastStartRef.current = now;
+        setChiBlastActive(true);
+      }
+
       const frameData = frameModeRef.current === 'locked'
         ? lockedFrameDataRef.current
         : smoothFrameData(getCurrentFrameData(results, canvas));
@@ -706,7 +871,6 @@ export default function App() {
 
       if (frameData) {
         const activePreset = getEffectPreset(portalEffectRef.current);
-        const now = Date.now();
         const stable = frameModeRef.current === 'locked' ? true : isFrameStable(frameData, now);
         let elapsed = 0;
         let progress = 0;
@@ -729,15 +893,7 @@ export default function App() {
         }
 
         const { polygon, angle, rect: currentRect } = frameData;
-        
-        canvasCtx.save();
-        drawWarpedPolygon(canvasCtx, polygon, angle, distortionIntensityRef.current);
-        canvasCtx.clip();
-
-        canvasCtx.translate(canvas.width, 0);
-        canvasCtx.scale(-1, 1);
-        drawPortalEffect(canvasCtx, results.image, portalEffectRef.current, canvas.width, canvas.height);
-        canvasCtx.restore();
+        drawCompositePortalFrame(canvasCtx, frameData, results.image, chiBlastProgress);
 
         // Calculate pulse effect for border
         const time = Date.now();
@@ -795,7 +951,7 @@ export default function App() {
     stepRef.current = 'aiming2';
   };
 
-  const capture2 = () => {
+  const capture2 = async () => {
     if (!canvasRef.current || !bgCanvasRef.current || !videoRef.current || !frameDataRef.current) {
       isCapturingRef.current = false;
       return;
@@ -803,36 +959,59 @@ export default function App() {
     isCapturingRef.current = true;
 
     const finalCtx = canvasRef.current.getContext('2d');
-    if (finalCtx) {
-      const { polygon, angle } = frameDataRef.current;
-      const activePreset = getEffectPreset(portalEffectRef.current);
-      
-      finalCtx.save();
-      if (bgPortalCenterRef.current) {
-        const { x, y } = bgPortalCenterRef.current;
-        finalCtx.translate(x, y);
-        finalCtx.scale(1.15, 1.15);
-        finalCtx.translate(-x, -y);
-      }
-      finalCtx.drawImage(bgCanvasRef.current, 0, 0);
-      finalCtx.restore();
-
-      finalCtx.save();
-      drawWarpedPolygon(finalCtx, polygon, angle, distortionIntensityRef.current);
-      finalCtx.clip();
-
-      finalCtx.translate(canvasRef.current.width, 0);
-      finalCtx.scale(-1, 1);
-      drawPortalEffect(finalCtx, videoRef.current, portalEffectRef.current, canvasRef.current.width, canvasRef.current.height);
-      finalCtx.restore();
-
-      drawFrameBorder(finalCtx, polygon, angle, 1, 4, activePreset);
+    if (!finalCtx) {
+      isCapturingRef.current = false;
+      return;
     }
 
-    const dataUrl = canvasRef.current.toDataURL('image/png');
-    const uploadDataUrl = canvasRef.current.toDataURL('image/jpeg', 0.86);
-    setFinalImage(dataUrl);
-    void persistCapturedImage(uploadDataUrl);
+    const activePreset = getEffectPreset(portalEffectRef.current);
+
+    if (captureMode === 'photobooth3') {
+      setPhotoBoothState('capturing');
+      setPhotoBoothFrames([]);
+
+      const shots: string[] = [];
+      for (let i = 0; i < PHOTOBOOTH_SHOTS; i += 1) {
+        const activeFrame = frameDataRef.current ?? lockedFrameDataRef.current;
+        if (!activeFrame) {
+          break;
+        }
+
+        const chiBlastProgress = getChiBlastProgress(Date.now());
+        drawCompositePortalFrame(finalCtx, activeFrame, videoRef.current, chiBlastProgress);
+        drawFrameBorder(finalCtx, activeFrame.polygon, activeFrame.angle, 1, 4, activePreset);
+
+        const shot = canvasRef.current.toDataURL('image/png');
+        shots.push(shot);
+        setPhotoBoothFrames([...shots]);
+
+        if (i < PHOTOBOOTH_SHOTS - 1) {
+          await wait(PHOTOBOOTH_GAP_MS);
+        }
+      }
+
+      const finalShot = shots[shots.length - 1] ?? null;
+      if (finalShot) {
+        setFinalImage(finalShot);
+        const uploadDataUrl = canvasRef.current.toDataURL('image/jpeg', 0.86);
+        void persistCapturedImage(uploadDataUrl);
+      } else {
+        setFinalImage(null);
+      }
+
+      setPhotoBoothState('idle');
+    } else {
+      const chiBlastProgress = getChiBlastProgress(Date.now());
+      drawCompositePortalFrame(finalCtx, frameDataRef.current, videoRef.current, chiBlastProgress);
+      drawFrameBorder(finalCtx, frameDataRef.current.polygon, frameDataRef.current.angle, 1, 4, activePreset);
+
+      const dataUrl = canvasRef.current.toDataURL('image/png');
+      const uploadDataUrl = canvasRef.current.toDataURL('image/jpeg', 0.86);
+      setPhotoBoothFrames([]);
+      setFinalImage(dataUrl);
+      void persistCapturedImage(uploadDataUrl);
+    }
+
     updateCountdown(null);
     syncHasFrame(false);
     setStep('result');
@@ -846,6 +1025,9 @@ export default function App() {
     setSaveState('idle');
     setSaveErrorMessage(null);
     setCopyState('idle');
+    setPhotoBoothFrames([]);
+    setPhotoBoothState('idle');
+    setChiBlastActive(false);
     lockedFrameDataRef.current = null;
     smoothedFrameDataRef.current = null;
     resetFrameStability();
@@ -854,6 +1036,8 @@ export default function App() {
     isCapturingRef.current = false;
     bgPortalCenterRef.current = null;
     capture1TimeRef.current = null;
+    chiBlastStartRef.current = null;
+    chiBlastLastTriggerRef.current = 0;
     syncHasFrame(false);
     updateCountdown(null);
     setStep('loading');
@@ -868,6 +1052,9 @@ export default function App() {
     setSaveState('idle');
     setSaveErrorMessage(null);
     setCopyState('idle');
+    setPhotoBoothFrames([]);
+    setPhotoBoothState('idle');
+    setChiBlastActive(false);
     syncHasFrame(false);
     lockedFrameDataRef.current = null;
     smoothedFrameDataRef.current = null;
@@ -877,6 +1064,8 @@ export default function App() {
     isCapturingRef.current = false;
     bgPortalCenterRef.current = null;
     capture1TimeRef.current = null;
+    chiBlastStartRef.current = null;
+    chiBlastLastTriggerRef.current = 0;
     updateCountdown(null);
     setStep('aiming1');
     stepRef.current = 'aiming1';
@@ -889,7 +1078,9 @@ export default function App() {
       : step === 'aiming1'
         ? (hasFrame ? (countdown !== null ? 'Khung ổn định - đang đếm' : 'Đã nhận khung - giữ ổn định') : 'Đang tìm khung tay')
         : step === 'aiming2'
-          ? (frameMode === 'locked'
+          ? (photoBoothState === 'capturing'
+            ? 'PhotoBooth đang chụp'
+            : frameMode === 'locked'
             ? (countdown !== null ? 'Khung khóa - đang đếm' : 'Khung đã khóa')
             : (hasFrame ? (countdown !== null ? 'Khung realtime - đang đếm' : 'Đã nhận khung realtime') : 'Đang tìm khung realtime'))
           : 'Hoàn tất';
@@ -917,8 +1108,14 @@ export default function App() {
       </a>
 
       <div className="workflow-chip absolute left-6 top-24 z-50 rounded-full px-4 py-2 text-xs font-semibold uppercase text-cyan-100">
-        {workflowStatus}
+        {workflowStatus} · {captureMode === 'photobooth3' ? 'PhotoBooth x3' : 'Single Shot'}
       </div>
+
+      {chiBlastActive && step === 'aiming2' && (
+        <div className="workflow-chip absolute left-6 top-36 z-50 rounded-full px-4 py-2 text-xs font-semibold uppercase text-amber-100">
+          Chi Blast active
+        </div>
+      )}
 
       <div className="absolute top-6 right-6 z-50 flex gap-4">
         <button
@@ -1001,6 +1198,31 @@ export default function App() {
                   }`}
                 >
                   Realtime
+                </button>
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-sm text-slate-200">Chế độ chụp</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCaptureMode('single')}
+                  aria-pressed={captureMode === 'single'}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    captureMode === 'single' ? 'bg-cyan-600 text-white' : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  Single
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCaptureMode('photobooth3')}
+                  aria-pressed={captureMode === 'photobooth3'}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                    captureMode === 'photobooth3' ? 'bg-cyan-600 text-white' : 'bg-slate-900/90 text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  PhotoBooth x3
                 </button>
               </div>
             </div>
@@ -1125,15 +1347,19 @@ export default function App() {
             <button
               type="button"
               onClick={capture2}
-              disabled={!hasFrame || !!cameraError}
+              disabled={!hasFrame || !!cameraError || photoBoothState === 'capturing'}
               className={`cta inline-flex items-center gap-2 px-8 py-4 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
-                hasFrame && !cameraError
+                hasFrame && !cameraError && photoBoothState !== 'capturing'
                   ? 'cta-success hover:scale-105 motion-reduce:hover:scale-100'
                   : 'cta-disabled'
               }`}
             >
               <CameraIcon size={24} aria-hidden="true" />
-              Chụp ngay (Hoặc giữ yên 3s)
+              {photoBoothState === 'capturing'
+                ? 'Đang chụp PhotoBooth...'
+                : captureMode === 'photobooth3'
+                  ? 'Chụp PhotoBooth 3 tấm'
+                  : 'Chụp ngay (Hoặc giữ yên 3s)'}
             </button>
             <button
               type="button"
@@ -1148,6 +1374,19 @@ export default function App() {
 
         {step === 'result' && (
           <div className="flex flex-col items-center gap-3">
+            {photoBoothFrames.length > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl border border-cyan-300/25 bg-slate-950/45 p-3">
+                {photoBoothFrames.map((frame, index) => (
+                  <img
+                    key={`${frame.slice(0, 28)}-${index}`}
+                    src={frame}
+                    alt={`PhotoBooth frame ${index + 1}`}
+                    className="h-20 w-28 rounded-md object-cover ring-1 ring-cyan-300/30"
+                  />
+                ))}
+              </div>
+            )}
+
             <div className="flex gap-4">
               <a
                 href={finalImage || '#'}
@@ -1222,6 +1461,9 @@ export default function App() {
               {frameMode === 'locked'
                 ? 'Cảnh vật bên ngoài đã bị đóng băng. Khung đã khóa từ bước 1, hãy tạo dáng bên trong cổng và giữ yên 3 giây để tự động chụp.'
                 : 'Cảnh vật bên ngoài đã bị đóng băng. Hãy tạo lại khung bằng 2 tay, giữ ổn định 3 giây để tự động chụp.'}
+            </p>
+            <p className="mt-2 text-xs tracking-wide text-amber-200/95">
+              Nâng cấp mới: Nắm tay lại và đưa 2 tay gần nhau để kích hoạt Chi Blast vortex.
             </p>
           </div>
         </div>
