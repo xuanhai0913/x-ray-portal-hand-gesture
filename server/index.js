@@ -14,16 +14,25 @@ const app = express();
 const serverPort = Number(process.env.SERVER_PORT || 3001);
 const distDir = path.resolve(__dirname, '../dist');
 
-const configureCloudinary = () => {
-  if (process.env.CLOUDINARY_URL) {
-    cloudinary.config(process.env.CLOUDINARY_URL);
+const getCloudinaryCredentials = () => {
+  return {
+    cloudinaryUrl: process.env.CLOUDINARY_URL?.trim(),
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME?.trim(),
+    apiKey: process.env.CLOUDINARY_API_KEY?.trim(),
+    apiSecret: process.env.CLOUDINARY_API_SECRET?.trim(),
+  };
+};
+
+const configureCloudinary = (credentials) => {
+  if (credentials.cloudinaryUrl) {
+    cloudinary.config(credentials.cloudinaryUrl);
     return;
   }
 
   cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: credentials.cloudName,
+    api_key: credentials.apiKey,
+    api_secret: credentials.apiSecret,
   });
 };
 
@@ -35,17 +44,23 @@ app.get('/api/health', (_req, res) => {
 
 app.post('/api/images', async (req, res) => {
   try {
-    configureCloudinary();
-    const cfg = cloudinary.config();
-    const missingKeys = [];
-    if (!cfg.cloud_name) missingKeys.push('CLOUDINARY_CLOUD_NAME');
-    if (!cfg.api_key) missingKeys.push('CLOUDINARY_API_KEY');
-    if (!cfg.api_secret) missingKeys.push('CLOUDINARY_API_SECRET');
+    const credentials = getCloudinaryCredentials();
+    const missingKeys = credentials.cloudinaryUrl
+      ? []
+      : [
+          !credentials.cloudName ? 'CLOUDINARY_CLOUD_NAME' : null,
+          !credentials.apiKey ? 'CLOUDINARY_API_KEY' : null,
+          !credentials.apiSecret ? 'CLOUDINARY_API_SECRET' : null,
+        ].filter(Boolean);
 
     if (missingKeys.length > 0) {
-      res.status(500).json({ error: `Cloudinary credentials are missing: ${missingKeys.join(', ')}` });
+      res.status(500).json({
+        error: `Cloudinary credentials are missing: ${missingKeys.join(', ')}. Restart server after updating env variables.`,
+      });
       return;
     }
+
+    configureCloudinary(credentials);
 
     const imageDataUrl = req.body?.imageDataUrl;
 
