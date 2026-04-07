@@ -190,6 +190,145 @@ body::before {
 	text-shadow: 0 0 36px rgba(34, 211, 238, 0.85);
 }
 
+.photobooth-page {
+	background:
+		radial-gradient(1200px 500px at 50% -25%, rgba(56, 189, 248, 0.2), transparent 68%),
+		radial-gradient(850px 420px at 90% 115%, rgba(251, 191, 36, 0.17), transparent 72%),
+		linear-gradient(160deg, #050913, #0a1327 42%, #0f1b30);
+}
+
+.pb-ambient {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	overflow: hidden;
+	z-index: 0;
+}
+
+.pb-orb {
+	position: absolute;
+	border-radius: 999px;
+	filter: blur(40px);
+	opacity: 0.45;
+	animation: pbFloat 10s ease-in-out infinite;
+}
+
+.pb-orb-a {
+	top: -8%;
+	left: -6%;
+	width: 280px;
+	height: 280px;
+	background: rgba(56, 189, 248, 0.55);
+}
+
+.pb-orb-b {
+	top: 14%;
+	right: -8%;
+	width: 240px;
+	height: 240px;
+	background: rgba(251, 191, 36, 0.42);
+	animation-delay: 1.4s;
+}
+
+.pb-orb-c {
+	bottom: -10%;
+	left: 32%;
+	width: 300px;
+	height: 300px;
+	background: rgba(244, 114, 182, 0.28);
+	animation-delay: 2.2s;
+}
+
+.pb-flash-burst {
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(circle at center, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 55%);
+	pointer-events: none;
+	animation: pbFlash 220ms ease-out;
+	mix-blend-mode: screen;
+}
+
+.pb-strip-stage {
+	position: relative;
+	overflow: hidden;
+}
+
+.pb-strip-stage::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background-image:
+		repeating-linear-gradient(
+			to bottom,
+			rgba(255, 255, 255, 0.025) 0,
+			rgba(255, 255, 255, 0.025) 2px,
+			transparent 2px,
+			transparent 6px
+		);
+	opacity: 0.5;
+}
+
+.pb-strip-image {
+	display: block;
+	border-radius: 14px;
+	box-shadow:
+		0 30px 55px rgba(2, 6, 23, 0.55),
+		0 0 0 1px rgba(226, 232, 240, 0.2);
+	transform: rotate(-1.35deg);
+	transform-origin: center top;
+}
+
+.pb-strip-placeholder {
+	width: min(86%, 340px);
+	padding: 20px;
+	border-radius: 12px;
+	background: linear-gradient(180deg, #f8fafc, #dbe3ef);
+	box-shadow:
+		0 22px 45px rgba(2, 6, 23, 0.5),
+		0 0 0 1px rgba(226, 232, 240, 0.3);
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	transform: rotate(-1.35deg);
+}
+
+.pb-placeholder-frame {
+	height: 92px;
+	border-radius: 10px;
+	background: linear-gradient(120deg, rgba(100, 116, 139, 0.36), rgba(148, 163, 184, 0.14), rgba(100, 116, 139, 0.36));
+	background-size: 220% 220%;
+	animation: pbShimmer 2.2s linear infinite;
+}
+
+@keyframes pbFlash {
+	0% {
+		opacity: 0.95;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+
+@keyframes pbFloat {
+	0%,
+	100% {
+		transform: translate3d(0, 0, 0) scale(1);
+	}
+	50% {
+		transform: translate3d(0, -18px, 0) scale(1.08);
+	}
+}
+
+@keyframes pbShimmer {
+	0% {
+		background-position: 0% 50%;
+	}
+	100% {
+		background-position: 200% 50%;
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	html:focus-within {
 		scroll-behavior: auto;
