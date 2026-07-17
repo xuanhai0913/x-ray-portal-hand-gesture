@@ -903,11 +903,11 @@ export default function App() {
       </div>
 
       <a
-        href="https://hailamdev.space"
+        href="https://my-portfolio-nxh.vercel.app/"
         target="_blank"
         rel="noopener noreferrer"
         className="author-chip absolute left-6 top-6 z-50"
-        aria-label="Tác giả Nguyen Xuan Hai - mở hailamdev.space"
+        aria-label="Tác giả Nguyen Xuan Hai - mở portfolio"
       >
         <img src="/Logo.jpg" alt="Logo Nguyen Xuan Hai" className="author-logo" />
         <span className="text-left leading-tight">
@@ -1244,12 +1244,12 @@ export default function App() {
           Built by Nguyen Xuan Hai ·
           {' '}
           <a
-            href="https://hailamdev.space"
+            href="https://my-portfolio-nxh.vercel.app/"
             target="_blank"
             rel="noopener noreferrer"
             className="author-link"
           >
-            hailamdev.space
+            my-portfolio-nxh.vercel.app
           </a>
         </p>
       </footer>

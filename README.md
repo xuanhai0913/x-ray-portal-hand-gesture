@@ -6,8 +6,8 @@
 
 An interactive camera web app that transforms hand gestures into a cinematic portal experience and auto-captures artistic composite photos.
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-cam.hailamdev.space-00E5FF?style=for-the-badge&logoColor=black)](https://cam.hailamdev.space)
-[![Author](https://img.shields.io/badge/Author-Nguyen_Xuan_Hai-111827?style=for-the-badge&logoColor=white)](https://cam.hailamdev.space)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-00E5FF?style=for-the-badge&logo=vercel&logoColor=black)](https://x-ray-portal-hand-gesture.vercel.app/)
+[![Author](https://img.shields.io/badge/Author-Nguyen_Xuan_Hai-111827?style=for-the-badge&logoColor=white)](https://my-portfolio-nxh.vercel.app/)
 
 ![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -63,7 +63,7 @@ The app is now split into independent capture experiences:
 | Graphics | HTML Canvas API |
 | Icons | lucide-react |
 | Motion Utilities | motion |
-| Hosting | Vercel (target domain: cam.hailamdev.space) |
+| Hosting | Vercel |
 
 ---
 
@@ -110,6 +110,6 @@ npm run preview
 
 Made with care by **Nguyen Xuan Hai**
 
-Deploy target: **cam.hailamdev.space**
+Live demo: **https://x-ray-portal-hand-gesture.vercel.app/**
 
 </div>
